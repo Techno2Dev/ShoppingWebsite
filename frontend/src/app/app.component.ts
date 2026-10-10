@@ -48,6 +48,7 @@ export class AppComponent implements OnInit {
   upiPaymentLink = '';
   qrGenerationError = '';
   orders: StoreOrder[] = [];
+  selectedAdminOrder: StoreOrder | null = null;
   adminProducts: Product[] = [];
   savingProduct = false;
   deletingProductId: number | null = null;
@@ -206,6 +207,7 @@ export class AppComponent implements OnInit {
   toggleAdmin(): void {
     if (this.adminOpen) {
       this.adminOpen = false;
+      this.selectedAdminOrder = null;
       if (this.currentOrder && this.paymentAccessToken) {
         this.resumePayment(this.currentOrder.id, this.paymentAccessToken);
       }
@@ -262,6 +264,7 @@ export class AppComponent implements OnInit {
   logoutAdmin(): void {
     this.storeApi.adminLogout().subscribe(() => {
       this.adminAuthenticated = false;
+      this.selectedAdminOrder = null;
       this.adminUserName = '';
       this.adminLoginPassword = '';
       this.adminOpen = false;
@@ -277,6 +280,7 @@ export class AppComponent implements OnInit {
       this.closeAccountSettings();
       return;
     }
+    this.selectedAdminOrder = null;
     this.currentAdminPassword = '';
     this.newAdminUserName = this.adminUserName;
     this.newAdminPassword = '';
@@ -469,6 +473,9 @@ export class AppComponent implements OnInit {
     });
     this.storeApi.getOrders().subscribe(orders => {
       this.orders = orders;
+      if (this.selectedAdminOrder) {
+        this.selectedAdminOrder = orders.find(order => order.id === this.selectedAdminOrder.id) || null;
+      }
     }, error => {
       this.handleAdminDataError(error, 'Could not load recent orders.');
     });
@@ -482,6 +489,7 @@ export class AppComponent implements OnInit {
   private handleAdminDataError(error: any, fallback: string): void {
     if (error.status === 401) {
       this.adminAuthenticated = false;
+      this.selectedAdminOrder = null;
       this.adminUserName = '';
       this.storeApi.clearAdminToken();
       this.orders = [];
@@ -575,6 +583,14 @@ export class AppComponent implements OnInit {
     }, error => {
       this.errorMessage = this.messageFrom(error, 'Could not update the payment status.');
     });
+  }
+
+  openAdminOrderDetails(order: StoreOrder): void {
+    this.selectedAdminOrder = order;
+  }
+
+  closeAdminOrderDetails(): void {
+    this.selectedAdminOrder = null;
   }
 
   trackProduct(index: number, product: Product): number { return product.id; }

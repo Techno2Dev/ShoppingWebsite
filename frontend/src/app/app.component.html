@@ -65,7 +65,7 @@
     <div class="admin-stats" *ngIf="!loadingAdmin"><article><span>ALL ORDERS</span><strong>{{ summary.totalOrders }}</strong><small>All customer orders</small></article><article><span>PAID REVENUE</span><strong>{{ summary.revenue | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong><small>From confirmed payments</small></article><article><span>AWAITING PAYMENT</span><strong>{{ summary.pendingPayments }}</strong><small>Pending admin action</small></article><article><span>PRODUCTS</span><strong>{{ summary.productCount }}</strong><small>Available in your collection</small></article></div>
     <div class="loading-state" *ngIf="loadingAdmin"><span class="spinner"></span> Gathering your numbers…</div>
     <section class="orders-panel"><div class="orders-heading"><div><span class="eyebrow">THE LATEST</span><h2>Recent orders</h2><p class="manual-admin-note">Check UPI receipts against your bank before manually marking an order Paid.</p></div><span>{{ orders.length }} total</span></div>
-      <div class="orders-table-wrap"><table><thead><tr><th>ORDER</th><th>CUSTOMER / PAYMENT NOTE</th><th>ITEMS</th><th>DATE</th><th>TOTAL</th><th>PAYMENT</th></tr></thead><tbody><tr *ngFor="let order of orders; trackBy: trackOrder"><td class="order-id">#{{ order.id }}</td><td><strong>{{ order.customerName }}</strong><small>{{ order.email }}</small><small *ngIf="order.paymentReportedAt">UPI payment reported · {{ order.paymentReportedAt | date:'short' }}</small><small *ngIf="order.paymentReference">UTR: {{ order.paymentReference }}</small><small *ngIf="order.paymentVerifiedAt">Reviewed by {{ order.paymentVerifiedBy || 'admin' }} · {{ order.paymentVerifiedAt | date:'short' }}</small></td><td>{{ order.items.length }} items</td><td>{{ order.createdAt | date:'mediumDate' }}</td><td>{{ order.total | currency:'INR':'symbol':'1.2-2':'en-IN' }}</td><td><select [ngModel]="order.paymentStatus" (ngModelChange)="setPaymentStatus(order, $event)" [disabled]="order.paymentStatus === 'Failed' || order.paymentStatus === 'Refunded' || order.paymentStatus === 'Expired' || order.paymentStatus === 'Cancelled'" [class]="'status-select status-' + order.paymentStatus.toLowerCase()"><option value="Pending">Pending</option><option value="Paid" [disabled]="order.paymentStatus !== 'Pending' || !order.paymentReference || !order.paymentReportedAt">Paid</option><option value="Failed" [disabled]="order.paymentStatus !== 'Pending'">Failed</option><option value="Refunded" [disabled]="order.paymentStatus !== 'Paid'">Refunded</option><option *ngIf="order.paymentStatus === 'Expired'" value="Expired" disabled>Expired</option><option *ngIf="order.paymentStatus === 'Cancelled'" value="Cancelled" disabled>Cancelled</option></select></td></tr><tr *ngIf="!orders.length && !loadingAdmin"><td colspan="6" class="no-orders">No orders yet.</td></tr></tbody></table></div>
+      <div class="orders-table-wrap"><table><thead><tr><th>ORDER</th><th>CUSTOMER / PAYMENT NOTE</th><th>ITEMS</th><th>DATE</th><th>TOTAL</th><th>PAYMENT</th></tr></thead><tbody><tr *ngFor="let order of orders; trackBy: trackOrder"><td class="order-id">#{{ order.id }}</td><td><strong>{{ order.customerName }}</strong><small>{{ order.email }}</small><small *ngIf="order.paymentReportedAt">UPI payment reported · {{ order.paymentReportedAt | date:'short' }}</small><small *ngIf="order.paymentReference">UTR: {{ order.paymentReference }}</small><small *ngIf="order.paymentVerifiedAt">Reviewed by {{ order.paymentVerifiedBy || 'admin' }} · {{ order.paymentVerifiedAt | date:'short' }}</small></td><td>{{ order.items.length }} items<button class="order-details-link" type="button" (click)="openAdminOrderDetails(order)" [attr.aria-label]="'View shipping address and items for order ' + order.id">View details</button></td><td>{{ order.createdAt | date:'mediumDate' }}</td><td>{{ order.total | currency:'INR':'symbol':'1.2-2':'en-IN' }}</td><td><select [ngModel]="order.paymentStatus" (ngModelChange)="setPaymentStatus(order, $event)" [disabled]="order.paymentStatus === 'Failed' || order.paymentStatus === 'Refunded' || order.paymentStatus === 'Expired' || order.paymentStatus === 'Cancelled'" [class]="'status-select status-' + order.paymentStatus.toLowerCase()"><option value="Pending">Pending</option><option value="Paid" [disabled]="order.paymentStatus !== 'Pending' || !order.paymentReference || !order.paymentReportedAt">Paid</option><option value="Failed" [disabled]="order.paymentStatus !== 'Pending'">Failed</option><option value="Refunded" [disabled]="order.paymentStatus !== 'Paid'">Refunded</option><option *ngIf="order.paymentStatus === 'Expired'" value="Expired" disabled>Expired</option><option *ngIf="order.paymentStatus === 'Cancelled'" value="Cancelled" disabled>Cancelled</option></select></td></tr><tr *ngIf="!orders.length && !loadingAdmin"><td colspan="6" class="no-orders">No orders yet.</td></tr></tbody></table></div>
       <div class="orders-note"><small>Check UPI payment against the bank/UPI receipt before manually marking an order Paid.</small></div>
     </section>
 
@@ -95,6 +95,30 @@
       </div>
     </section>
   </main>
+
+  <div class="order-detail-overlay" *ngIf="selectedAdminOrder && adminOpen && adminAuthenticated" (click)="closeAdminOrderDetails()">
+    <section class="order-detail-dialog" role="dialog" aria-modal="true" [attr.aria-label]="'Order ' + selectedAdminOrder.id + ' shipping and items'" (click)="$event.stopPropagation()">
+      <div class="order-detail-heading">
+        <div><span class="eyebrow">ORDER DETAILS</span><h2>Order #{{ selectedAdminOrder.id }}</h2><span class="order-detail-date">{{ selectedAdminOrder.createdAt | date:'medium' }}</span></div>
+        <button class="order-detail-close" type="button" aria-label="Close order details" (click)="closeAdminOrderDetails()">×</button>
+      </div>
+      <div class="order-detail-shipping">
+        <h3>Ship to</h3>
+        <strong>{{ selectedAdminOrder.customerName }}</strong>
+        <p>{{ selectedAdminOrder.address }}</p>
+        <span>{{ selectedAdminOrder.email }}</span>
+      </div>
+      <div class="order-detail-items">
+        <h3>Items in this order</h3>
+        <div class="order-detail-item" *ngFor="let item of selectedAdminOrder.items">
+          <strong>{{ item.productName }}</strong>
+          <span>{{ item.quantity }} × {{ item.unitPrice | currency:'INR':'symbol':'1.2-2':'en-IN' }}</span>
+          <b>{{ item.quantity * item.unitPrice | currency:'INR':'symbol':'1.2-2':'en-IN' }}</b>
+        </div>
+        <div class="order-detail-total"><span>Order total</span><strong>{{ selectedAdminOrder.total | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong></div>
+      </div>
+    </section>
+  </div>
 
   <div class="account-modal-overlay" *ngIf="accountSettingsOpen" (click)="closeAccountSettings()">
     <section class="credentials-modal" role="dialog" aria-modal="true" aria-labelledby="credentials-title" (click)="$event.stopPropagation()">
