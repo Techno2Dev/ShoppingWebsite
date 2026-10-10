@@ -4,7 +4,7 @@
 
 export const environment = {
   production: false,
-  apiUrl: 'https://shoppingwebsite-0x76.onrender.com/api',
+  apiUrl: 'http://localhost:5065/api',
   upiVpa: '9923095128@ybl',
   upiPayeeName: 'Sapanas Store'
 };
