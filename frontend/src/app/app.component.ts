@@ -230,21 +230,29 @@ export class AppComponent implements OnInit {
       this.loadAdminData();
     }, () => {
       this.adminAuthenticated = false;
+      this.adminUserName = '';
     });
   }
 
   loginAdmin(): void {
     if (this.loggingAdminLogin) { return; }
     this.errorMessage = '';
-      if (this.currentOrder) {
-        this.orderSuccessId = this.currentOrder.id;
-      }
     this.loggingAdminLogin = true;
-    this.storeApi.adminLogin(this.adminLoginUserName.trim(), this.adminLoginPassword).subscribe(session => {
-      this.adminAuthenticated = true;
-      this.adminUserName = session.userName;
+    this.storeApi.adminLogin(this.adminLoginUserName.trim(), this.adminLoginPassword).subscribe(() => {
       this.adminLoginPassword = '';
+      this.storeApi.getAdminSession().subscribe(session => {
+        this.adminAuthenticated = true;
+        this.adminUserName = session.userName;
+        this.loggingAdminLogin = false;
+        this.loadAdminData();
+      }, () => {
+        this.adminAuthenticated = false;
+        this.loggingAdminLogin = false;
+        this.errorMessage = 'Sign-in succeeded, but your browser did not retain the admin session. Allow cookies for the store API and try again.';
+      });
+    }, error => {
       this.loggingAdminLogin = false;
+      this.errorMessage = this.messageFrom(error, 'Could not sign in. Check your credentials and try again.');
     });
   }
 
@@ -433,18 +441,30 @@ export class AppComponent implements OnInit {
       this.loadingAdmin = false;
     }, error => {
       this.loadingAdmin = false;
-      this.errorMessage = this.messageFrom(error, 'Could not load the admin dashboard.');
+      this.handleAdminDataError(error, 'Could not load the admin dashboard.');
     });
     this.storeApi.getOrders().subscribe(orders => {
       this.orders = orders;
     }, error => {
-      this.errorMessage = this.messageFrom(error, 'Could not load recent orders.');
+      this.handleAdminDataError(error, 'Could not load recent orders.');
     });
     this.storeApi.getProducts().subscribe(products => {
       this.adminProducts = products;
     }, error => {
-      this.errorMessage = this.messageFrom(error, 'Could not load the product collection.');
+      this.handleAdminDataError(error, 'Could not load the product collection.');
     });
+  }
+
+  private handleAdminDataError(error: any, fallback: string): void {
+    if (error.status === 401) {
+      this.adminAuthenticated = false;
+      this.adminUserName = '';
+      this.orders = [];
+      this.adminProducts = [];
+      this.errorMessage = 'Your admin session is unavailable. Sign in again; if it persists, allow cookies for the store API.';
+    } else {
+      this.errorMessage = this.messageFrom(error, fallback);
+    }
   }
 
   createProduct(): void {
