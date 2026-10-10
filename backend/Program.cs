@@ -19,11 +19,12 @@ builder.Services.AddDbContext<StoreDbContext>(options =>
 var frontendOrigins = builder.Configuration.GetSection("FrontendOrigins").Get<string[]>() ??
     (builder.Configuration["FrontendOrigin"] is { Length: > 0 } configuredOrigin
         ? configuredOrigin.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-        : ["https://shoppingwebsite-1-9ytf.onrender.com"]);
-if (builder.Environment.IsDevelopment())
-{
-    frontendOrigins = frontendOrigins.Append("http://localhost:4200").Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-}
+        : Array.Empty<string>());
+frontendOrigins = frontendOrigins
+    .Append("http://localhost:4200")
+    .Append("https://shoppingwebsite-1-9ytf.onrender.com")
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToArray();
 
 builder.Services.AddCors(options => options.AddPolicy("frontend", policy =>
     policy.WithOrigins(frontendOrigins).AllowAnyHeader().AllowAnyMethod().AllowCredentials()));

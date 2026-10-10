@@ -735,3 +735,11 @@ C:\Users\sjadhav\AppData\Local\Temp\sapana-backend-cors-build\backend.runtimecon
 C:\Users\sjadhav\AppData\Local\Temp\sapana-backend-cors-build\backend.dll
 C:\Users\sjadhav\AppData\Local\Temp\sapana-backend-cors-build\backend.pdb
 C:\project\personal project\backend\obj\Debug\net9.0\backend.sourcelink.json
+C:\Users\sjadhav\AppData\Local\Temp\sapana-backend-cors-fix\appsettings.Development.json
+C:\Users\sjadhav\AppData\Local\Temp\sapana-backend-cors-fix\appsettings.json
+C:\Users\sjadhav\AppData\Local\Temp\sapana-backend-cors-fix\backend.staticwebassets.endpoints.json
+C:\Users\sjadhav\AppData\Local\Temp\sapana-backend-cors-fix\backend.exe
+C:\Users\sjadhav\AppData\Local\Temp\sapana-backend-cors-fix\backend.deps.json
+C:\Users\sjadhav\AppData\Local\Temp\sapana-backend-cors-fix\backend.runtimeconfig.json
+C:\Users\sjadhav\AppData\Local\Temp\sapana-backend-cors-fix\backend.dll
+C:\Users\sjadhav\AppData\Local\Temp\sapana-backend-cors-fix\backend.pdb
