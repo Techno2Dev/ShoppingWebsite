@@ -1,0 +1,27 @@
+# .NET build outputs
+bin/
+obj/
+TestResults/
+coverage/
+
+# Local databases and transient SQLite journals
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Local configuration and credentials (use environment variables in deployment)
+appsettings.Local.json
+appsettings.*.Local.json
+.env
+.env.*
+!.env.example
+
+# IDE and machine-specific files
+.vs/
+*.user
+*.suo
+*.rsuser
+*.userosscache
+*.sln.docstates

@@ -95,7 +95,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #f0d6b4;
+  border-bottom: 1px solid #e9bd86;
+  background: linear-gradient(110deg, #fff5e6, #ffead1);
+}
+
+.topbar .brand {
+  color: #71341f;
+}
+
+.topbar .brand small {
+  color: #963f22;
 }
 
 .brand {
@@ -150,6 +159,16 @@
   color: #b52d1f;
 }
 
+.topbar .admin-link,
+.topbar .bag-button {
+  color: #71341f;
+}
+
+.topbar .admin-link:hover,
+.topbar .bag-button:hover {
+  color: #b52d1f;
+}
+
 .header-actions {
   display: flex;
   align-items: center;
@@ -189,6 +208,11 @@
   background: #ffe0af;
   color: #763720;
   font-size: 11px;
+}
+
+.topbar .bag-count {
+  background: #bd2b1d;
+  color: #fff8ee;
 }
 
 .bag-button.bag-pulse {
@@ -699,12 +723,19 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  color: #85664e;
+  border-top: 1px solid #e9bd86;
+  background: linear-gradient(110deg, #ffead1, #fff2dd);
+  color: #785039;
   font-size: 10px;
 }
 
 .site-footer .brand {
   font-size: 15px;
+  color: #71341f;
+}
+
+.site-footer .brand small {
+  color: #963f22;
 }
 
 .admin-page {
