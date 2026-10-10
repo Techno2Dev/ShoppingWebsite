@@ -1,0 +1,92 @@
+using backend.Data;
+using backend.Models;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddControllers();
+var storeConnectionString = builder.Configuration.GetConnectionString("Store");
+if (string.IsNullOrWhiteSpace(storeConnectionString))
+{
+    throw new InvalidOperationException("Set ConnectionStrings__Store to your Neon PostgreSQL connection string.");
+}
+storeConnectionString = PostgresConnectionString.Normalize(storeConnectionString);
+
+builder.Services.AddDbContext<StoreDbContext>(options =>
+    options.UseNpgsql(storeConnectionString));
+var frontendOrigin = builder.Configuration["FrontendOrigin"] ?? "http://localhost:4200";
+builder.Services.AddCors(options => options.AddPolicy("frontend", policy =>
+    policy.WithOrigins(frontendOrigin).AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.Cookie.Name = "SapanaKitchen.Admin";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.ExpireTimeSpan = TimeSpan.FromHours(8);
+        options.SlidingExpiration = true;
+        options.Events.OnRedirectToLogin = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        };
+        options.Events.OnRedirectToAccessDenied = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Task.CompletedTask;
+        };
+    });
+builder.Services.AddAuthorization(options => options.AddPolicy("AdminOnly", policy =>
+    policy.RequireAuthenticatedUser().RequireRole("Admin")));
+
+var app = builder.Build();
+
+app.UseCors("frontend");
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapControllers();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<StoreDbContext>();
+    db.Database.EnsureCreated();
+
+    var configuredAdminUserName = builder.Configuration["Admin:UserName"];
+    var configuredAdminPassword = builder.Configuration["Admin:Password"];
+    if (app.Environment.IsDevelopment())
+    {
+        configuredAdminUserName ??= "admin";
+        configuredAdminPassword ??= "KitchenKatta@123";
+    }
+
+    if (!string.IsNullOrWhiteSpace(configuredAdminUserName) &&
+        !string.IsNullOrWhiteSpace(configuredAdminPassword) &&
+        !db.AdminUsers.Any())
+    {
+        db.AdminUsers.Add(new AdminUser
+        {
+            UserName = configuredAdminUserName.Trim(),
+            NormalizedUserName = configuredAdminUserName.Trim().ToUpperInvariant(),
+            PasswordHash = PasswordHashing.Hash(configuredAdminPassword)
+        });
+        db.SaveChanges();
+    }
+
+    if (!db.Products.Any())
+    {
+        db.Products.AddRange(
+            new Product { Name = "Everyday Backpack", Description = "A lightweight everyday carry with room for all the essentials.", Price = 64.00m, Image = "🎒", Category = "Accessories", Stock = 18 },
+            new Product { Name = "Ceramic Pour-over Set", Description = "Slow mornings start with a better cup. Includes dripper and server.", Price = 42.00m, Image = "☕", Category = "Home", Stock = 12 },
+            new Product { Name = "Studio Headphones", Description = "Rich, balanced sound in a comfortable over-ear fit.", Price = 129.00m, Image = "🎧", Category = "Tech", Stock = 9 },
+            new Product { Name = "Linen Market Tote", Description = "A sturdy, reusable tote made for market runs and weekends away.", Price = 28.00m, Image = "👜", Category = "Accessories", Stock = 24 },
+            new Product { Name = "Desk Plant Kit", Description = "A low-maintenance green companion, pot included.", Price = 35.00m, Image = "🪴", Category = "Home", Stock = 15 },
+            new Product { Name = "Pocket Notebook Set", Description = "Three thoughtfully designed notebooks for ideas on the go.", Price = 18.00m, Image = "📓", Category = "Stationery", Stock = 30 }
+        );
+        db.SaveChanges();
+    }
+}
+
+app.Run();

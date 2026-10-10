@@ -1,0 +1,142 @@
+<div class="store-shell">
+  <div class="splash-screen" *ngIf="splashVisible" role="status" aria-live="polite">
+    <img src="assets/sapana-kitchen-katta-logo.png" alt="Sapana’s Kitchen Katta">
+    <span class="splash-spinner" aria-hidden="true"></span>
+    <p>Preparing your shopping experience</p>
+  </div>
+  <header class="topbar">
+    <a class="brand" href="#shop" (click)="showShop()">
+      <img src="assets/sapana-kitchen-katta-logo.png" alt="" class="brand-logo">
+      <span>Sapana’s Kitchen Katta<small>THOUGHTFULLY SELECTED · MADE WITH CARE</small></span>
+    </a>
+    <div class="header-actions">
+      <button class="admin-link" type="button" (click)="toggleAdmin()">{{ adminOpen ? 'Back to shop' : 'Admin' }}</button>
+      <button class="bag-button" [class.bag-pulse]="bagPulse" type="button" (click)="cartOpen = true" [attr.aria-label]="'Open shopping bag, ' + cartCount + ' items'">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l1 13H4L5 8Z"></path><path d="M9 9V6a3 3 0 0 1 6 0v3"></path></svg>
+        <span>Bag</span><span class="bag-count">{{ cartCount }}</span>
+      </button>
+    </div>
+  </header>
+  <main class="product-page" *ngIf="!adminOpen" id="shop">
+    <section class="collection" id="collection">
+      <div class="collection-tools">
+        <div class="category-tabs" aria-label="Filter by category"><button *ngFor="let category of categories" (click)="activeCategory = category" [class.selected]="activeCategory === category">{{ category }}</button></div>
+        <label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 5 5"></path></svg><input type="search" placeholder="Search products" [(ngModel)]="searchTerm"></label>
+      </div>
+      <div class="notice" *ngIf="noticeVisible && notice && !errorMessage" role="status" aria-live="polite"><span class="notice-check" aria-hidden="true">✓</span><span>{{ notice }}</span><button type="button" (click)="noticeVisible = false" aria-label="Dismiss notification">×</button></div>
+      <div class="error-banner" *ngIf="errorMessage" role="alert">{{ errorMessage }} <button (click)="errorMessage = ''" aria-label="Dismiss">×</button></div>
+      <div class="loading-state" *ngIf="loadingProducts"><span class="spinner"></span> Loading products…</div>
+      <div class="empty-state" *ngIf="!loadingProducts && !filteredProducts.length">No products found. Try another search or category.</div>
+      <div class="product-grid" *ngIf="!loadingProducts">
+        <article class="product-card" *ngFor="let product of filteredProducts; trackBy: trackProduct">
+          <div class="product-visual" [attr.data-category]="product.category"><span class="product-category">{{ product.category }}</span><img *ngIf="product.imageUrl" class="product-photo" [src]="product.imageUrl" [alt]="product.name"><span *ngIf="!product.imageUrl" class="product-emoji">{{ product.image }}</span><span class="stock-label" *ngIf="product.stock > 0 && product.stock < 5">Only {{ product.stock }} left</span></div>
+          <div class="product-info"><div><h3>{{ product.name }}</h3><p>{{ product.description }}</p></div><strong class="price">{{ product.price | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong></div>
+          <button class="add-button" (click)="addToCart(product)" [disabled]="product.stock < 1"><span>{{ product.stock < 1 ? 'Unavailable' : 'Add to order' }}</span><span>{{ product.stock > 0 ? '+' : '—' }}</span></button>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <main class="admin-login-page" *ngIf="adminOpen && !adminAuthenticated">
+    <form class="admin-login-card" (ngSubmit)="loginAdmin()">
+      <img src="assets/sapana-kitchen-katta-logo.png" alt="Sapana’s Kitchen Katta" class="login-logo">
+      <span class="eyebrow">ADMIN ACCESS</span>
+      <h1>Sign in to your <em>store.</em></h1>
+      <p>Use your administrator account to manage products and customer orders.</p>
+      <div class="error-banner" *ngIf="errorMessage" role="alert">{{ errorMessage }}</div>
+      <label>Username<input name="adminUserName" [(ngModel)]="adminLoginUserName" autocomplete="username" required maxlength="100" placeholder="Username"></label>
+      <label>Password<input name="adminPassword" type="password" [(ngModel)]="adminLoginPassword" autocomplete="current-password" required maxlength="200" placeholder="Password"></label>
+      <button class="checkout-button" type="submit" [disabled]="loggingAdminLogin">{{ loggingAdminLogin ? 'Signing in…' : 'Sign in' }} <span>↗</span></button>
+    </form>
+  </main>
+
+  <main class="admin-page" *ngIf="adminOpen && adminAuthenticated">
+    <div class="admin-heading"><div><span class="eyebrow">SAPANA’S KITCHEN KATTA</span><h1>Store <em>dashboard.</em></h1><p>Signed in as {{ adminUserName }}. Manage products and customer orders.</p></div><div class="admin-heading-actions"><button class="refresh-button" (click)="loadAdminData()">↻ &nbsp;Refresh</button><button class="account-button" type="button" (click)="openAccountSettings()">{{ accountSettingsOpen ? 'Close settings' : 'Change login' }}</button><button class="logout-button" (click)="logoutAdmin()">Sign out</button></div></div>
+    <div class="error-banner" *ngIf="errorMessage" role="alert">{{ errorMessage }} <button (click)="errorMessage = ''" aria-label="Dismiss">×</button></div>
+    <div class="notice" *ngIf="notice && !errorMessage" role="status">{{ notice }} <button (click)="notice = ''" aria-label="Dismiss">×</button></div>
+    <div class="admin-stats" *ngIf="!loadingAdmin"><article><span>ALL ORDERS</span><strong>{{ summary.totalOrders }}</strong><small>All customer orders</small></article><article><span>PAID REVENUE</span><strong>{{ summary.revenue | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong><small>From confirmed payments</small></article><article><span>AWAITING PAYMENT</span><strong>{{ summary.pendingPayments }}</strong><small>Needs manual review</small></article><article><span>PRODUCTS</span><strong>{{ summary.productCount }}</strong><small>Available in your collection</small></article></div>
+    <div class="loading-state" *ngIf="loadingAdmin"><span class="spinner"></span> Gathering your numbers…</div>
+    <section class="orders-panel"><div class="orders-heading"><div><span class="eyebrow">THE LATEST</span><h2>Recent orders</h2><p class="manual-admin-note">Check UPI receipts against your bank before manually marking an order Paid.</p></div><span>{{ orders.length }} total</span></div>
+      <div class="orders-table-wrap"><table><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>ITEMS</th><th>DATE</th><th>TOTAL</th><th>PAYMENT</th></tr></thead><tbody><tr *ngFor="let order of orders; trackBy: trackOrder"><td class="order-id">#{{ order.id }}</td><td><strong>{{ order.customerName }}</strong><small>{{ order.email }}</small></td><td>{{ order.items.length }} items</td><td>{{ order.createdAt | date:'mediumDate' }}</td><td>{{ order.total | currency:'INR':'symbol':'1.2-2':'en-IN' }}</td><td><select [ngModel]="order.paymentStatus" (ngModelChange)="setPaymentStatus(order, $event)" [class]="'status-select status-' + order.paymentStatus.toLowerCase()"><option>Pending</option><option>Paid</option><option>Failed</option><option>Refunded</option></select></td></tr><tr *ngIf="!orders.length && !loadingAdmin"><td colspan="6" class="no-orders">No orders yet.</td></tr></tbody></table></div>
+      <div class="orders-note"><small>Check UPI payment against the bank/UPI receipt before manually marking an order Paid.</small></div>
+    </section>
+
+    <section class="catalog-panel">
+      <div class="orders-heading"><div><span class="eyebrow">PRODUCT COLLECTION</span><h2>Manage products</h2><p>Add a product or remove one that is no longer available.</p></div><span>{{ adminProducts.length }} products</span></div>
+      <form class="product-form" (ngSubmit)="createProduct()">
+        <label>Product name<input name="productName" [(ngModel)]="newProduct.name" required maxlength="120" placeholder="e.g. Everyday tote bag"></label>
+        <label>Description<input name="productDescription" [(ngModel)]="newProduct.description" required maxlength="1000" placeholder="A short description"></label>
+        <div class="form-row">
+          <label>Price (₹)<input name="productPrice" type="number" [(ngModel)]="newProduct.price" min="0.01" max="99999999.99" step="0.01" required></label>
+          <label>Stock<input name="productStock" type="number" [(ngModel)]="newProduct.stock" min="0" max="1000000" step="1" required></label>
+          <label>Category<input name="productCategory" [(ngModel)]="newProduct.category" required maxlength="60" placeholder="Home"></label>
+          <label>Image file<input name="productImageFile" type="file" accept="image/jpeg,image/png,image/gif,image/webp" (change)="onProductImageSelected($event)"><small class="file-help">JPG, PNG, GIF, WebP · max 5 MB</small></label>
+          <div class="selected-image-preview" *ngIf="productImagePreviewUrl"><img [src]="productImagePreviewUrl" alt="Selected product preview"><button type="button" class="delete-product-button" (click)="clearProductImage()">Remove image</button></div>
+          <label class="emoji-fallback-label" *ngIf="!selectedProductImage">Or use an emoji<input name="productImage" [(ngModel)]="newProduct.image" maxlength="200" placeholder="🍲"></label>
+        </div>
+        <button class="add-product-button" type="submit" [disabled]="savingProduct">{{ savingProduct ? 'Adding product…' : 'Add product' }} <span>+</span></button>
+      </form>
+      <div class="catalog-list">
+        <article class="catalog-product" *ngFor="let product of adminProducts; trackBy: trackProduct">
+          <span class="catalog-product-image"><img *ngIf="product.imageUrl" [src]="product.imageUrl" [alt]="product.name"><span *ngIf="!product.imageUrl">{{ product.image }}</span></span>
+          <div class="catalog-product-details"><strong>{{ product.name }}</strong><small>{{ product.category }} · {{ product.stock }} in stock</small></div>
+          <strong class="catalog-product-price">{{ product.price | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong>
+          <button class="delete-product-button" type="button" (click)="deleteProduct(product)" [disabled]="deletingProductId !== null" [attr.aria-label]="'Remove ' + product.name">{{ deletingProductId === product.id ? 'Removing…' : 'Remove' }}</button>
+        </article>
+        <p class="no-products" *ngIf="!adminProducts.length && !loadingAdmin">No products yet. Add your first product above.</p>
+      </div>
+    </section>
+  </main>
+
+  <div class="account-modal-overlay" *ngIf="accountSettingsOpen" (click)="closeAccountSettings()">
+    <section class="credentials-modal" role="dialog" aria-modal="true" aria-labelledby="credentials-title" (click)="$event.stopPropagation()">
+      <div class="credentials-modal-heading">
+        <div><span class="eyebrow">ACCOUNT SETTINGS</span><h2 id="credentials-title">Change admin login</h2></div>
+        <button class="close-button" type="button" aria-label="Close change login dialog" (click)="closeAccountSettings()">×</button>
+      </div>
+      <p class="credentials-intro">Confirm your current password. Choose a username without spaces and a new password of at least 12 characters.</p>
+      <div class="error-banner modal-error" *ngIf="errorMessage" role="alert">{{ errorMessage }}</div>
+      <form class="credentials-form" (ngSubmit)="updateAdminCredentials()">
+        <label>Current password<input name="currentAdminPassword" type="password" [(ngModel)]="currentAdminPassword" autocomplete="current-password" required maxlength="200"></label>
+        <label>New username<input name="newAdminUserName" [(ngModel)]="newAdminUserName" autocomplete="username" required minlength="3" maxlength="100" pattern="\\S+" title="Username cannot contain spaces"></label>
+        <label>New password<input name="newAdminPassword" type="password" [(ngModel)]="newAdminPassword" autocomplete="new-password" required minlength="12" maxlength="200"></label>
+        <button class="checkout-button" type="submit" [disabled]="updatingAdminCredentials">{{ updatingAdminCredentials ? 'Updating login…' : 'Save new login' }} <span>↗</span></button>
+      </form>
+    </section>
+  </div>
+
+  <div class="drawer-scrim" *ngIf="cartOpen" (click)="cartOpen = false"></div>
+  <aside class="cart-drawer" [class.drawer-open]="cartOpen" [attr.aria-hidden]="!cartOpen"><div class="drawer-heading"><div><span class="eyebrow">YOUR SHOPPING BAG</span><h2>Shopping bag <span>({{ cartCount }})</span></h2></div><button class="close-button" (click)="cartOpen = false" aria-label="Close shopping bag">×</button></div>
+    <div class="cart-lines" *ngIf="cart.length"><article class="cart-line" *ngFor="let line of cart"><span class="cart-emoji"><img *ngIf="line.product.imageUrl" [src]="line.product.imageUrl" [alt]="line.product.name"><span *ngIf="!line.product.imageUrl">{{ line.product.image }}</span></span><div class="cart-line-info"><strong>{{ line.product.name }}</strong><small>{{ line.product.price | currency:'INR':'symbol':'1.2-2':'en-IN' }}</small><div class="quantity-control"><button (click)="changeQuantity(line.product.id, -1)" aria-label="Decrease quantity">−</button><span>{{ line.quantity }}</span><button (click)="changeQuantity(line.product.id, 1)" aria-label="Increase quantity">+</button><button class="remove-line" (click)="removeFromCart(line.product.id)">Remove</button></div></div><strong class="line-total">{{ line.product.price * line.quantity | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong></article></div>
+    <div class="cart-empty" *ngIf="!cart.length"><span>✳</span><h3>Your bag is empty.</h3><p>Add a product from the collection to get started.</p><button class="primary-link" (click)="cartOpen = false">Continue shopping <span>↗</span></button></div>
+    <form class="checkout-form" *ngIf="cart.length" (ngSubmit)="placeOrder()"><div class="checkout-total"><span>Subtotal</span><strong>{{ cartTotal | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong></div><p class="checkout-note">Shipping and any applicable taxes are calculated at checkout.</p><label>Your name<input name="customerName" [(ngModel)]="customerName" autocomplete="name" required maxlength="120" placeholder="Alex Morgan"></label><label>Email address<input name="email" type="email" [(ngModel)]="email" autocomplete="email" required maxlength="254" placeholder="you@example.com"></label><label>Shipping address<textarea name="address" [(ngModel)]="address" autocomplete="street-address" required maxlength="500" rows="3" placeholder="Street, city, postal code"></textarea></label><button class="checkout-button" type="submit" [disabled]="submittingOrder">{{ submittingOrder ? 'Placing your order…' : 'Place order · ' + (cartTotal | currency:'INR':'symbol':'1.2-2':'en-IN') }} <span>↗</span></button><small class="secure-note">A simple guest checkout. No account needed.</small></form>
+  </aside>
+
+  <div class="success-overlay" *ngIf="orderSuccessId !== null">
+    <section class="success-card">
+      <span class="success-icon">✳</span>
+      <span class="eyebrow">ORDER RECEIVED</span>
+      <h2>Thank you.<br><em>Order received.</em></h2>
+      <p>Your order <strong>#{{ orderSuccessId }}</strong> is saved for <strong>{{ currentOrder?.total | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong>.</p>
+      <section class="upi-payment" *ngIf="upiConfigured">
+        <h3>Pay securely with UPI</h3>
+        <img *ngIf="upiQrDataUrl" class="upi-qr" [src]="upiQrDataUrl" alt="UPI payment QR code for this order">
+        <span class="qr-loading" *ngIf="!upiQrDataUrl && !qrGenerationError">Preparing your payment QR…</span>
+        <a class="upi-app-link" [href]="upiPaymentLink">Open in a UPI app <span>↗</span></a>
+        <p class="upi-instructions">Scan the QR with any UPI app. The amount and order reference are included.</p>
+      </section>
+      <p class="upi-setup-note" *ngIf="!upiConfigured">UPI payment is not configured yet. Set the store UPI ID in the frontend environment settings. This order is saved as Pending.</p>
+      <p class="qr-error" *ngIf="qrGenerationError">{{ qrGenerationError }} <a [href]="upiPaymentLink">Open the UPI app instead</a>.</p>
+      <div class="manual-verification"><strong>Payment is verified manually</strong><span>Your order stays Pending until the store admin confirms the incoming payment and updates its status.</span></div>
+      <button class="checkout-button" (click)="showShop()">Continue shopping <span>↗</span></button>
+    </section>
+  </div>
+  <footer class="site-footer" *ngIf="!adminOpen">
+    <a class="brand" href="#shop" (click)="showShop()">
+      <img src="assets/sapana-kitchen-katta-logo.png" alt="" class="brand-logo">
+      <span>Sapana’s Kitchen Katta<small>THOUGHTFULLY SELECTED · MADE WITH CARE</small></span>
+    </a>
+    <span>Useful finds for everyday living.</span>
+    <span>© {{ 2026 }} Sapana’s Kitchen Katta</span>
+  </footer>
+</div>

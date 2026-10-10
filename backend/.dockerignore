@@ -1,0 +1,8 @@
+bin/
+obj/
+store.db
+store.db-shm
+store.db-wal
+*.user
+*.suo
+.vs/

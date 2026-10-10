@@ -1,0 +1,17 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build frontend and backend",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet build .\\backend\\backend.csproj; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; npm --prefix .\\frontend run build"
+			],
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}
