@@ -2045,6 +2045,21 @@ td small {
   .header-actions { gap: 10px; }
 }
 
+@media (max-width: 600px) {
+  .topbar .brand { min-width: 0; flex: 0 1 auto; }
+  .topbar .brand > span { min-width: 0; max-width: 108px; overflow: hidden; text-overflow: ellipsis; }
+  .topbar .brand small { display: none; }
+  .topbar .header-actions { flex: 0 0 auto; gap: 7px; }
+  .topbar .customer-login-button { padding: 7px 10px; white-space: nowrap; }
+  .topbar .bag-button { gap: 4px; }
+  .topbar .bag-label { display: none; }
+}
+
+@media (max-width: 370px) {
+  .topbar .brand > span { max-width: 72px; }
+  .topbar .header-actions { gap: 5px; }
+}
+
 .product-page{
   min-height: 100vh;
   .product-page .collection{
