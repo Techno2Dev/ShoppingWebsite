@@ -140,7 +140,7 @@ public sealed class AdminController(StoreDbContext db) : ControllerBase
         return Ok(new
         {
             totalOrders = await db.Orders.CountAsync(cancellationToken),
-            revenue = await db.Orders.Where(order => order.PaymentStatus == "Paid")
+            revenue = await db.Orders.Where(order => order.PaymentStatus == "Paid" && order.PaymentMethod != "Razorpay")
                 .SumAsync(order => (decimal?)order.Total, cancellationToken) ?? 0m,
             pendingPayments = await db.Orders.CountAsync(order => order.PaymentStatus == "Pending", cancellationToken),
             productCount = await db.Products.CountAsync(cancellationToken)
@@ -237,5 +237,29 @@ public sealed class AdminController(StoreDbContext db) : ControllerBase
         order = await db.Orders.AsNoTracking().Include(candidate => candidate.Items)
             .SingleAsync(candidate => candidate.Id == id, cancellationToken);
         return Ok(order);
+    }
+
+    [HttpPost("orders/{id:int}/fulfillment")]
+    public async Task<IActionResult> UpdateFulfillment(int id, UpdateFulfillmentRequest request, CancellationToken cancellationToken)
+    {
+        if (request.Status is not ("Order received" or "Dispatched" or "Delivered"))
+            return BadRequest(new { message = "Choose Order received, Dispatched or Delivered." });
+        var order = await db.Orders.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+        if (order is null) return NotFound();
+        if (order.PaymentStatus != "Paid") return Conflict(new { message = "Only paid orders can be dispatched or delivered." });
+        var next = request.Status;
+        if ((order.FulfillmentStatus == "Order received" && next != "Dispatched") ||
+            (order.FulfillmentStatus == "Dispatched" && next != "Delivered") ||
+            order.FulfillmentStatus == "Delivered")
+            return Conflict(new { message = "Fulfillment status must advance from received to dispatched to delivered." });
+        var tracking = next == "Dispatched" ? request.TrackingId?.Trim() : order.TrackingId;
+        if (next == "Dispatched" && (string.IsNullOrWhiteSpace(tracking) || tracking.Length > 100))
+            return BadRequest(new { message = "Enter a tracking ID of up to 100 characters before dispatching." });
+        var updated = await db.Orders.Where(item => item.Id == id && item.PaymentStatus == "Paid" &&
+                item.FulfillmentStatus == order.FulfillmentStatus)
+            .ExecuteUpdateAsync(set => set.SetProperty(item => item.FulfillmentStatus, next)
+                .SetProperty(item => item.TrackingId, tracking), cancellationToken);
+        if (updated == 0) return Conflict(new { message = "Order status changed. Refresh and try again." });
+        return Ok(new { fulfillmentStatus = next, trackingId = tracking });
     }
 }

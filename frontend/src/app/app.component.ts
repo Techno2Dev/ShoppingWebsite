@@ -1,8 +1,8 @@
-import { Component, HostListener, NgZone, OnInit } from '@angular/core';
+import { Component, ElementRef, HostListener, NgZone, OnInit, ViewChild } from '@angular/core';
 import { animate, group, query, style, transition, trigger } from '@angular/animations';
 import * as QRCode from 'qrcode';
 import { environment } from '../environments/environment';
-import { CartLine, Product, StoreApiService, StoreOrder, AdminSummary } from './store-api.service';
+import { CartLine, Product, StoreApiService, StoreOrder, AdminSummary, CustomerProfile } from './store-api.service';
 
 @Component({
   selector: 'app-root',
@@ -49,6 +49,24 @@ export class AppComponent implements OnInit {
   activeCategory = 'All';
   cartOpen = false;
   adminOpen = false;
+  customerPage: 'shop' | 'orders' | 'details' = 'shop';
+  customerProfile: CustomerProfile | null = null;
+  customerLoginOpen = false;
+  customerMenuOpen = false;
+  customerAuthBusy = false;
+  customerAuthError = '';
+  googleClientId = '';
+  customerOrders: StoreOrder[] = [];
+  customerOrdersPage = 0;
+  customerOrdersTotal = 0;
+  customerOrdersLoading = false;
+  customerOrdersError = '';
+  savingCustomerDetails = false;
+  customerDetailsMessage = '';
+  customerDetailsName = '';
+  customerDetailsAddress = '';
+  private googleScriptPromise: Promise<void> | null = null;
+  @ViewChild('googleButton', { static: false }) googleButton?: ElementRef<HTMLElement>;
   adminAuthenticated = false;
   checkingAdminSession = false;
   private adminSessionRequestId = 0;
@@ -99,6 +117,7 @@ export class AppComponent implements OnInit {
   loadingOrders = false;
   private ordersRequestId = 0;
   selectedAdminOrder: StoreOrder | null = null;
+  dispatchTrackingId = '';
   adminProducts: Product[] = [];
   savingProduct = false;
   editingProduct: Product | null = null;
@@ -129,7 +148,157 @@ export class AppComponent implements OnInit {
     this.restoreCart();
     this.restorePendingPayment();
     this.loadProducts();
+    this.syncCustomerPage();
+    this.storeApi.googleConfig().subscribe(config => { this.googleClientId = config.clientId; });
+    if (this.storeApi.hasCustomerSession()) {
+      this.storeApi.customerMe().subscribe(customer => {
+        this.setCustomer(customer);
+        if (this.customerPage === 'orders') { this.loadMyOrders(); }
+      }, () => this.storeApi.clearCustomerSession());
+    }
     this.storeApi.razorpayAvailability().subscribe(result => { this.razorpayAvailable = result.enabled; }, () => { this.razorpayAvailable = false; });
+  }
+
+  @HostListener('window:hashchange')
+  @HostListener('window:popstate')
+  syncCustomerPage(): void {
+    this.customerPage = window.location.hash === '#/my-orders' ? 'orders' :
+      window.location.hash === '#/my-details' ? 'details' : 'shop';
+    if (this.customerPage === 'orders' && this.customerProfile) { this.loadMyOrders(); }
+    this.customerMenuOpen = false;
+  }
+
+  goToCustomerPage(page: 'shop' | 'orders' | 'details'): void {
+    this.adminOpen = false;
+    this.customerLoginOpen = false;
+    this.customerMenuOpen = false;
+    this.cartOpen = false;
+    this.orderSuccessId = null;
+    if (page === 'shop') {
+      window.history.pushState(null, '', window.location.pathname + window.location.search);
+      this.customerPage = 'shop';
+    } else {
+      window.location.hash = page === 'orders' ? '/my-orders' : '/my-details';
+      this.syncCustomerPage();
+    }
+    window.scrollTo(0, 0);
+  }
+
+  openCustomerLogin(): void {
+    this.customerLoginOpen = true;
+    this.customerAuthError = '';
+    this.customerMenuOpen = false;
+    if (!this.googleClientId) {
+      this.customerAuthError = 'Google sign-in is not configured yet. Guest checkout is still available.';
+      return;
+    }
+    this.loadGoogleScript().then(() => this.zone.run(() => {
+      if (!this.customerLoginOpen || !this.googleButton) { return; }
+      const google = (window as any).google;
+      google.accounts.id.initialize({
+        client_id: this.googleClientId,
+        callback: (response: any) => this.zone.run(() => this.finishGoogleLogin(response.credential))
+      });
+      this.googleButton.nativeElement.innerHTML = '';
+      google.accounts.id.renderButton(this.googleButton.nativeElement,
+        { theme: 'outline', size: 'large', text: 'continue_with', width: 270 });
+    })).catch(() => this.zone.run(() => {
+      this.customerAuthError = 'Google sign-in could not load. Guest checkout is still available.';
+    }));
+  }
+
+  private loadGoogleScript(): Promise<void> {
+    if ((window as any).google && (window as any).google.accounts) { return Promise.resolve(); }
+    if (!this.googleScriptPromise) {
+      this.googleScriptPromise = new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://accounts.google.com/gsi/client';
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => { script.remove(); this.googleScriptPromise = null; reject(); };
+        document.head.appendChild(script);
+      });
+    }
+    return this.googleScriptPromise;
+  }
+
+  private finishGoogleLogin(credential: string): void {
+    if (!credential || this.customerAuthBusy) { return; }
+    this.customerAuthBusy = true;
+    this.customerAuthError = '';
+    this.storeApi.customerGoogleLogin(credential).subscribe(result => {
+      this.customerAuthBusy = false;
+      this.customerLoginOpen = false;
+      this.setCustomer(result.customer);
+      if (this.customerPage === 'orders') { this.loadMyOrders(); }
+    }, error => {
+      this.customerAuthBusy = false;
+      this.customerAuthError = this.messageFrom(error, 'Google sign-in failed. Please try again.');
+    });
+  }
+
+  private setCustomer(customer: CustomerProfile): void {
+    this.customerProfile = customer;
+    this.customerDetailsName = customer.name;
+    this.customerDetailsAddress = customer.deliveryAddress || '';
+    if (!this.customerName) { this.customerName = customer.name; }
+    if (!this.email) { this.email = customer.email; }
+    if (!this.address) { this.address = customer.deliveryAddress || ''; }
+  }
+
+  customerLogout(): void {
+    this.storeApi.customerLogout().subscribe(() => this.finishCustomerLogout(), () => this.finishCustomerLogout());
+  }
+
+  private finishCustomerLogout(): void {
+    this.storeApi.clearCustomerSession();
+    this.customerProfile = null;
+    this.customerOrders = [];
+    this.customerName = '';
+    this.email = '';
+    this.address = '';
+    this.goToCustomerPage('shop');
+  }
+
+  loadMyOrders(page: number = 1): void {
+    if (!this.customerProfile) { return; }
+    this.customerOrdersLoading = true;
+    this.customerOrdersError = '';
+    this.storeApi.myOrders(page).subscribe(result => {
+      this.customerOrders = page === 1 ? result.items : this.customerOrders.concat(result.items);
+      this.customerOrdersPage = result.page;
+      this.customerOrdersTotal = result.totalCount;
+      this.customerOrdersLoading = false;
+    }, error => {
+      this.customerOrdersLoading = false;
+      this.customerOrdersError = this.messageFrom(error, 'Could not load your orders.');
+      if (error.status === 401) { this.storeApi.clearCustomerSession(); this.customerProfile = null; }
+    });
+  }
+
+  customerOrdersContain(orderId: number): boolean {
+    return this.customerOrders.some(order => order.id === orderId);
+  }
+
+  claimCurrentGuestOrder(): void {
+    if (!this.currentOrder || !this.paymentAccessToken || !this.customerProfile) { return; }
+    this.storeApi.claimGuestOrder(this.currentOrder.id, this.paymentAccessToken).subscribe(() => this.loadMyOrders(), error => {
+      this.customerOrdersError = this.messageFrom(error, 'Could not link this order.');
+    });
+  }
+
+  saveCustomerDetails(): void {
+    if (this.savingCustomerDetails || !this.customerProfile) { return; }
+    this.savingCustomerDetails = true;
+    this.customerDetailsMessage = '';
+    this.storeApi.updateCustomerDetails(this.customerDetailsName.trim(), this.customerDetailsAddress.trim()).subscribe(customer => {
+      this.savingCustomerDetails = false;
+      this.setCustomer(customer);
+      this.customerDetailsMessage = 'Details saved.';
+    }, error => {
+      this.savingCustomerDetails = false;
+      this.customerDetailsMessage = this.messageFrom(error, 'Could not save your details.');
+    });
   }
 
   get categories(): string[] {
@@ -317,6 +486,7 @@ export class AppComponent implements OnInit {
       this.saveCart();
       this.submittingOrder = false;
       this.loadProducts();
+      if (this.customerProfile) { this.loadMyOrders(); }
       if (order.paymentMethod === 'Razorpay') { this.payWithRazorpay(); }
     }, error => {
       this.submittingOrder = false;
@@ -327,6 +497,8 @@ export class AppComponent implements OnInit {
 
   toggleAdmin(): void {
     this.closeProductDetails();
+    this.customerLoginOpen = false;
+    if (!this.adminOpen && this.customerPage !== 'shop') { this.goToCustomerPage('shop'); }
     if (this.adminOpen) {
       this.adminOpen = false;
       this.checkingAdminSession = false;
@@ -455,6 +627,7 @@ export class AppComponent implements OnInit {
 
   showShop(): void {
     this.adminOpen = false;
+    this.customerPage = 'shop';
     this.cartOpen = false;
     this.orderSuccessId = null;
     this.errorMessage = '';
@@ -985,8 +1158,31 @@ export class AppComponent implements OnInit {
     });
   }
 
+  advanceFulfillment(order: StoreOrder): void {
+    if (order.paymentStatus !== 'Paid' || order.fulfillmentStatus === 'Delivered') { return; }
+    const next = order.fulfillmentStatus === 'Dispatched' ? 'Delivered' : 'Dispatched';
+    let trackingId = order.trackingId || '';
+    if (next === 'Dispatched') {
+      trackingId = this.dispatchTrackingId.trim();
+      if (!trackingId || trackingId.length > 100) {
+        this.errorMessage = 'Enter a tracking ID of up to 100 characters.';
+        return;
+      }
+    } else if (!window.confirm('Mark order #' + order.id + ' as delivered?')) { return; }
+    this.storeApi.updateFulfillment(order.id, next, trackingId).subscribe(updated => {
+      order.fulfillmentStatus = updated.fulfillmentStatus;
+      order.trackingId = updated.trackingId;
+      this.showAdminToast('Order #' + order.id + ' marked ' + next + '.');
+      this.loadAdminData();
+    }, error => {
+      this.errorMessage = this.messageFrom(error, 'Could not update delivery status.');
+    });
+  }
+
   openAdminOrderDetails(order: StoreOrder): void {
     this.selectedAdminOrder = order;
+    this.dispatchTrackingId = order.trackingId || '';
+    this.errorMessage = '';
   }
 
   closeAdminOrderDetails(): void {

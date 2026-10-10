@@ -8,4 +8,6 @@ public sealed record CustomerOrderStatusResponse(
     string? PaymentReference,
     DateTime? PaymentReportedAt,
     List<OrderItem> Items,
-    string PaymentMethod);
+    string PaymentMethod,
+    string FulfillmentStatus,
+    string? TrackingId);

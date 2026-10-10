@@ -11,13 +11,26 @@
     </a>
     <div class="header-actions">
       <button class="admin-link" type="button" (click)="toggleAdmin()">{{ adminOpen ? 'Back to shop' : 'Admin' }}</button>
+      <button class="customer-login-button" type="button" *ngIf="!adminOpen && !customerProfile" (click)="openCustomerLogin()">Login</button>
+      <div class="customer-profile-menu" *ngIf="!adminOpen && customerProfile">
+        <button class="customer-avatar-button" type="button" (click)="customerMenuOpen = !customerMenuOpen" aria-label="Customer profile menu" [attr.aria-expanded]="customerMenuOpen">
+          <img *ngIf="customerProfile.photoUrl" [src]="customerProfile.photoUrl" alt="" referrerpolicy="no-referrer">
+          <span *ngIf="!customerProfile.photoUrl">{{ customerProfile.name.charAt(0) }}</span>
+        </button>
+        <div class="customer-menu-options" *ngIf="customerMenuOpen">
+          <span>{{ customerProfile.name }}</span>
+          <button type="button" (click)="goToCustomerPage('orders')">My Orders</button>
+          <button type="button" (click)="goToCustomerPage('details')">My Details</button>
+          <button type="button" (click)="customerLogout()">Sign out</button>
+        </div>
+      </div>
       <button class="bag-button" *ngIf="!adminOpen" [class.bag-pulse]="bagPulse" type="button" (click)="openBagFromProduct()" [attr.aria-label]="'Open shopping bag, ' + cartCount + ' items'">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l1 13H4L5 8Z"></path><path d="M9 9V6a3 3 0 0 1 6 0v3"></path></svg>
         <span>Bag</span><span class="bag-count">{{ cartCount }}</span>
       </button>
     </div>
   </header>
-  <main class="product-page" *ngIf="!adminOpen" @pageEnter id="shop">
+  <main class="product-page" *ngIf="!adminOpen && customerPage === 'shop'" @pageEnter id="shop">
     <section class="collection" id="collection">
       <div class="collection-tools">
         <div class="category-tabs" aria-label="Filter by category"><button *ngFor="let category of categories" (click)="activeCategory = category" [class.selected]="activeCategory === category">{{ category }}</button></div>
@@ -61,6 +74,53 @@
       <button type="button" (click)="reopenPaymentDetails()">{{ currentOrder.paymentStatus !== 'Pending' ? 'View order details' : currentOrder.paymentReportedAt ? 'Check payment status' : 'Resume payment' }} <span aria-hidden="true">↗</span></button>
     </aside>
   </main>
+
+  <main class="customer-account-page" *ngIf="!adminOpen && customerPage === 'orders'" @pageEnter>
+    <div class="customer-account-heading"><div><span class="eyebrow">YOUR ACCOUNT</span><h1>My Orders</h1></div><button type="button" (click)="goToCustomerPage('shop')">← Back to shop</button></div>
+    <div *ngIf="!customerProfile" class="customer-account-card"><p>Sign in with Google to view orders placed while signed in. Guest checkout is still available without an account.</p><button class="customer-account-action" type="button" (click)="openCustomerLogin()">Login · Continue with Google</button></div>
+    <ng-container *ngIf="customerProfile">
+      <p class="customer-account-message" *ngIf="customerOrdersError" role="alert">{{ customerOrdersError }}</p>
+      <button class="customer-account-action" type="button" (click)="loadMyOrders()" [disabled]="customerOrdersLoading">{{ customerOrdersLoading ? 'Loading…' : 'Refresh orders' }}</button>
+      <div class="customer-account-card" *ngIf="currentOrder && paymentAccessToken && !customerOrdersLoading && !customerOrdersContain(currentOrder.id)">
+        <p>Have a guest order from this tab? Link it to this account using its private order token.</p>
+        <button class="customer-account-action" type="button" (click)="claimCurrentGuestOrder()">Add order #{{ currentOrder.id }} to My Orders</button>
+      </div>
+      <div class="customer-account-card" *ngIf="!customerOrdersLoading && !customerOrders.length"><p>No linked orders yet. New orders placed while signed in will appear here.</p></div>
+      <article class="customer-account-card customer-order-card" *ngFor="let order of customerOrders; trackBy: trackOrder">
+        <div class="customer-order-heading"><strong>Order #{{ order.id }}</strong><span>{{ order.createdAt | date:'mediumDate' }}</span></div>
+        <div class="customer-order-status"><span>Payment: <strong>{{ order.paymentStatus }}</strong></span><span>Order: <strong>{{ order.fulfillmentStatus || 'Order received' }}</strong></span></div>
+        <p *ngIf="order.trackingId">Tracking ID: <strong>{{ order.trackingId }}</strong></p>
+        <p *ngFor="let item of order.items">{{ item.productName }} × {{ item.quantity }}</p>
+        <strong>{{ order.total | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong>
+      </article>
+      <button class="customer-account-action" type="button" *ngIf="customerOrders.length < customerOrdersTotal" (click)="loadMyOrders(customerOrdersPage + 1)" [disabled]="customerOrdersLoading">{{ customerOrdersLoading ? 'Loading…' : 'Load older orders' }}</button>
+    </ng-container>
+  </main>
+
+  <main class="customer-account-page" *ngIf="!adminOpen && customerPage === 'details'" @pageEnter>
+    <div class="customer-account-heading"><div><span class="eyebrow">YOUR ACCOUNT</span><h1>My Details</h1></div><button type="button" (click)="goToCustomerPage('shop')">← Back to shop</button></div>
+    <div *ngIf="!customerProfile" class="customer-account-card"><p>Sign in with Google to see and save your details.</p><button class="customer-account-action" type="button" (click)="openCustomerLogin()">Login · Continue with Google</button></div>
+    <form class="customer-account-card customer-details-form" *ngIf="customerProfile" (ngSubmit)="saveCustomerDetails()">
+      <img *ngIf="customerProfile.photoUrl" class="customer-details-photo" [src]="customerProfile.photoUrl" alt="Your Google profile photo" referrerpolicy="no-referrer">
+      <p>Email: <strong>{{ customerProfile.email }}</strong> <small>(from your Google account)</small></p>
+      <label>Name<input name="customerDetailsName" [(ngModel)]="customerDetailsName" maxlength="120" required></label>
+      <label>Delivery address<textarea name="customerDetailsAddress" [(ngModel)]="customerDetailsAddress" maxlength="500" rows="3"></textarea></label>
+      <button class="customer-account-action" type="submit" [disabled]="savingCustomerDetails">{{ savingCustomerDetails ? 'Saving…' : 'Save details' }}</button>
+      <p *ngIf="customerDetailsMessage" role="status">{{ customerDetailsMessage }}</p>
+    </form>
+  </main>
+
+  <div class="customer-login-overlay" *ngIf="customerLoginOpen && !adminOpen" @dialogMotion (click)="customerLoginOpen = false">
+    <section class="customer-login-dialog" role="dialog" aria-modal="true" aria-labelledby="customer-login-title" (click)="$event.stopPropagation()">
+      <button class="customer-login-close" type="button" aria-label="Close sign in" (click)="customerLoginOpen = false">×</button>
+      <span class="eyebrow">CUSTOMER ACCOUNT</span><h2 id="customer-login-title">Login</h2>
+      <p>Sign in to see your orders and save delivery details. Guest checkout stays available.</p>
+      <div #googleButton class="google-sign-in-button" aria-label="Continue with Google"></div>
+      <p *ngIf="customerAuthBusy" role="status">Signing in…</p>
+      <p class="customer-login-error" *ngIf="customerAuthError" role="alert">{{ customerAuthError }}</p>
+      <button class="customer-guest-button" type="button" (click)="customerLoginOpen = false; goToCustomerPage('shop')">Continue as guest</button>
+    </section>
+  </div>
 
   <div class="product-detail-overlay" *ngIf="selectedProduct && !adminOpen" @dialogMotion (click)="closeProductDetails()">
     <section class="product-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="product-detail-title" (click)="$event.stopPropagation()">
@@ -212,6 +272,17 @@
           <b>{{ item.quantity * item.unitPrice | currency:'INR':'symbol':'1.2-2':'en-IN' }}</b>
         </div>
         <div class="order-detail-total"><span>Order total</span><strong>{{ selectedAdminOrder.total | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong></div>
+      </div>
+      <div class="order-fulfillment-panel">
+        <h3>Delivery status</h3>
+        <p>{{ selectedAdminOrder.fulfillmentStatus || 'Order received' }}</p>
+        <p *ngIf="selectedAdminOrder.trackingId">Tracking ID: <strong>{{ selectedAdminOrder.trackingId }}</strong></p>
+        <label *ngIf="selectedAdminOrder.paymentStatus === 'Paid' && selectedAdminOrder.fulfillmentStatus !== 'Dispatched' && selectedAdminOrder.fulfillmentStatus !== 'Delivered'">Tracking ID
+          <input type="text" [(ngModel)]="dispatchTrackingId" maxlength="100" placeholder="Enter tracking ID before dispatching">
+        </label>
+        <button type="button" *ngIf="selectedAdminOrder.paymentStatus === 'Paid' && selectedAdminOrder.fulfillmentStatus !== 'Delivered'" (click)="advanceFulfillment(selectedAdminOrder)">{{ selectedAdminOrder.fulfillmentStatus === 'Dispatched' ? 'Mark delivered' : 'Mark dispatched · add tracking ID' }}</button>
+        <p *ngIf="selectedAdminOrder.paymentStatus !== 'Paid'">Confirm payment before dispatching.</p>
+        <p class="customer-login-error" *ngIf="errorMessage" role="alert">{{ errorMessage }}</p>
       </div>
     </section>
   </div>

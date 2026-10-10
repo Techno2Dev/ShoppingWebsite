@@ -175,6 +175,64 @@
   gap: 20px;
 }
 
+.customer-login-button, .customer-avatar-button {
+  border: 1px solid #e5cdb3;
+  border-radius: 22px;
+  background: #fffaf3;
+  color: #71341f;
+  cursor: pointer;
+}
+.customer-login-button { padding: 8px 14px; font-size: 12px; }
+.customer-profile-menu { position: relative; z-index: 20; }
+.customer-avatar-button { display: grid; width: 38px; height: 38px; place-items: center; overflow: hidden; font-weight: 700; }
+.customer-avatar-button img { width: 100%; height: 100%; object-fit: cover; }
+.customer-menu-options {
+  position: absolute; top: calc(100% + 9px); right: 0; z-index: 21;
+  display: flex; flex-direction: column; min-width: 172px; padding: 9px;
+  border: 1px solid #efd9bf; border-radius: 9px; background: #fffdf8;
+  box-shadow: 0 12px 30px rgba(75,48,32,.18);
+}
+.customer-menu-options > span { padding: 9px; color: #715e49; font-size: 11px; overflow-wrap: anywhere; }
+.customer-menu-options button { padding: 10px; border: 0; background: none; color: #71341f; text-align: left; cursor: pointer; }
+.customer-menu-options button:hover { background: #fff0d8; }
+
+.customer-account-page { min-height: 65vh; padding: 48px 0 90px; }
+.customer-account-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.customer-account-heading h1 { margin: 8px 0 20px; color: #4c2e1c; font-size: 30px; }
+.customer-account-heading button, .customer-account-action, .order-fulfillment-panel button {
+  padding: 10px 15px; border: 1px solid #bd2b1d; border-radius: 6px;
+  background: #bd2b1d; color: #fff; font-size: 12px; cursor: pointer;
+}
+.customer-account-heading button { background: #fffaf3; color: #9d3924; }
+.customer-account-card { margin: 12px 0; padding: 20px; border: 1px solid #efd9bf; border-radius: 9px; background: #fffdf8; color: #715e49; font-size: 12px; line-height: 1.6; }
+.customer-account-message, .customer-login-error { color: #932f1f; font-size: 12px; }
+.customer-order-heading, .customer-order-status { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.customer-order-heading strong { color: #4c2e1c; font-size: 15px; }
+.customer-order-status { margin: 12px 0; padding: 10px; border-radius: 6px; background: #fff3e3; }
+.customer-order-card p { margin: 6px 0; }
+.customer-details-form { max-width: 520px; }
+.customer-details-photo { width: 54px; height: 54px; border-radius: 50%; object-fit: cover; }
+.customer-details-form label { display: block; margin: 14px 0; color: #4c2e1c; }
+.customer-details-form input, .customer-details-form textarea { display: block; width: 100%; margin-top: 6px; padding: 10px; border: 1px solid #e5cdb3; border-radius: 5px; background: #fff; color: #4c2e1c; }
+.customer-login-overlay { position: fixed; inset: 0; z-index: 1050; display: grid; place-items: center; padding: 16px; background: rgba(50,28,17,.68); }
+.customer-login-dialog { position: relative; width: min(100%, 390px); padding: 29px; border: 1px solid #efd9bf; border-radius: 14px; background: #fffdf8; box-shadow: 0 24px 80px rgba(45,24,12,.32); }
+.customer-login-dialog h2 { margin: 8px 0; color: #4c2e1c; }
+.customer-login-dialog p { color: #765b45; font-size: 12px; line-height: 1.5; }
+.customer-login-dialog .customer-login-error { color: #932f1f; }
+.customer-login-close { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border: 1px solid #e5cdb3; border-radius: 50%; background: #fffaf3; color: #71341f; cursor: pointer; }
+.google-sign-in-button { min-height: 40px; margin: 16px 0; }
+.customer-guest-button { border: 0; background: none; color: #9d3924; cursor: pointer; }
+.order-fulfillment-panel { margin-top: 18px; padding-top: 16px; border-top: 1px solid #efd9bf; color: #715e49; font-size: 12px; }
+.order-fulfillment-panel h3 { margin: 0 0 8px; color: #4c2e1c; }
+.order-fulfillment-panel p { overflow-wrap: anywhere; }
+.order-fulfillment-panel label { display: block; margin: 12px 0; color: #4c2e1c; }
+.order-fulfillment-panel input { display: block; width: 100%; margin-top: 6px; padding: 10px; border: 1px solid #e5cdb3; border-radius: 5px; background: #fff; color: #4c2e1c; }
+@media (max-width: 600px) {
+  .customer-account-page { padding: 24px 0 50px; }
+  .customer-account-heading h1 { font-size: 24px; }
+  .customer-account-card { padding: 15px; }
+}
+
 .admin-link,
 .bag-button {
   border: 0;

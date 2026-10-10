@@ -1,8 +1,10 @@
 using backend.Data;
 using backend.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using System.Security.Cryptography;
 
 namespace backend.Controllers;
@@ -37,6 +39,40 @@ public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier te
         return order is null ? NotFound() : Ok(order);
     }
 
+    [HttpGet("mine")]
+    [Authorize(Policy = "CustomerOnly")]
+    public async Task<IActionResult> Mine([FromQuery] int page = 1, CancellationToken cancellationToken = default)
+    {
+        if (page < 1 || page > 1000000) return BadRequest(new { message = "Invalid page." });
+        const int pageSize = 20;
+        var customerId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var totalCount = await db.Orders.CountAsync(item => item.CustomerUserId == customerId, cancellationToken);
+        var orders = await db.Orders.AsNoTracking().Where(item => item.CustomerUserId == customerId)
+            .Include(item => item.Items).OrderByDescending(item => item.CreatedAt)
+            .ThenByDescending(item => item.Id).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+        Response.Headers.CacheControl = "no-store";
+        return Ok(new { items = orders.Select(order => new
+        {
+            order.Id, order.CustomerName, order.Email, order.Address, order.CreatedAt,
+            order.Total, order.PaymentMethod, order.PaymentStatus,
+            order.FulfillmentStatus, order.TrackingId, order.Items
+        }), totalCount, page, pageSize });
+    }
+
+    [HttpPost("{id:int}/claim")]
+    [Authorize(Policy = "CustomerOnly")]
+    public async Task<IActionResult> Claim(int id, ReportUpiPaymentRequest request, CancellationToken cancellationToken)
+    {
+        var order = await db.Orders.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+        if (order is null || !HasValidAccessToken(order, request.AccessToken)) return NotFound();
+        var customerId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        if (order.CustomerUserId == customerId) return Ok();
+        if (order.CustomerUserId is not null) return Conflict(new { message = "This order is already linked to an account." });
+        var updated = await db.Orders.Where(item => item.Id == id && item.CustomerUserId == null)
+            .ExecuteUpdateAsync(update => update.SetProperty(item => item.CustomerUserId, (int?)customerId), cancellationToken);
+        return updated == 1 ? Ok() : Conflict(new { message = "The order was linked to another account." });
+    }
+
     [HttpPost]
     public async Task<ActionResult<CreateOrderResponse>> Create(CreateOrderRequest request, CancellationToken cancellationToken)
     {
@@ -68,6 +104,13 @@ public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier te
         }
 
         var accessToken = OrderPaymentSecurity.CreateAccessToken();
+        int? customerUserId = null;
+        if (Request.Headers.Authorization.Count > 0)
+        {
+            var result = await HttpContext.AuthenticateAsync("CustomerBearer");
+            if (!result.Succeeded) return Unauthorized(new { message = "Customer session expired. Sign in again or continue as a guest." });
+            customerUserId = int.Parse(result.Principal!.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        }
         var order = new Order
         {
             CustomerName = request.CustomerName.Trim(),
@@ -75,6 +118,7 @@ public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier te
             Address = request.Address.Trim(),
             PaymentStatus = "Pending",
             PaymentMethod = request.PaymentMethod,
+            CustomerUserId = customerUserId,
             PaymentAccessTokenHash = OrderPaymentSecurity.HashAccessToken(accessToken),
             Items = requestedItems.Select(item => new OrderItem
             {
@@ -254,5 +298,7 @@ public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier te
         order.PaymentReference,
         order.PaymentReportedAt,
         order.Items,
-        order.PaymentMethod);
+        order.PaymentMethod,
+        order.FulfillmentStatus,
+        order.TrackingId);
 }
