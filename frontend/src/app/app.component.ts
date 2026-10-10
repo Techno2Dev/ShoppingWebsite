@@ -31,6 +31,8 @@ export class AppComponent implements OnInit {
   notice = '';
   noticeVisible = false;
   private noticeTimer: number | null = null;
+  adminToastMessage = '';
+  private adminToastTimer: number | null = null;
   bagPulse = false;
   errorMessage = '';
   splashVisible = true;
@@ -150,6 +152,22 @@ export class AppComponent implements OnInit {
     }, 3200);
   }
 
+  private showAdminToast(message: string): void {
+    if (this.adminToastTimer !== null) {
+      window.clearTimeout(this.adminToastTimer);
+    }
+    this.adminToastMessage = message;
+    this.adminToastTimer = window.setTimeout(() => this.dismissAdminToast(), 4000);
+  }
+
+  dismissAdminToast(): void {
+    if (this.adminToastTimer !== null) {
+      window.clearTimeout(this.adminToastTimer);
+      this.adminToastTimer = null;
+    }
+    this.adminToastMessage = '';
+  }
+
   private pulseBag(): void {
     this.bagPulse = false;
     window.setTimeout(() => {
@@ -213,6 +231,7 @@ export class AppComponent implements OnInit {
   toggleAdmin(): void {
     if (this.adminOpen) {
       this.adminOpen = false;
+      this.dismissAdminToast();
       this.selectedAdminOrder = null;
       this.closeEditProduct();
       if (this.currentOrder && this.paymentAccessToken) {
@@ -271,6 +290,7 @@ export class AppComponent implements OnInit {
   logoutAdmin(): void {
     this.storeApi.adminLogout().subscribe(() => {
       this.adminAuthenticated = false;
+      this.dismissAdminToast();
       this.selectedAdminOrder = null;
       this.closeEditProduct();
       this.adminUserName = '';
@@ -320,7 +340,7 @@ export class AppComponent implements OnInit {
       this.newAdminPassword = '';
       this.accountSettingsOpen = false;
       this.updatingAdminCredentials = false;
-      this.notice = 'Admin username and password updated.';
+      this.showAdminToast('Admin login details updated.');
     }, error => {
       this.updatingAdminCredentials = false;
       this.errorMessage = this.messageFrom(error, 'Could not update credentials. Check the current password and try again.');
@@ -499,6 +519,7 @@ export class AppComponent implements OnInit {
   private handleAdminDataError(error: any, fallback: string): void {
     if (error.status === 401) {
       this.adminAuthenticated = false;
+      this.dismissAdminToast();
       this.selectedAdminOrder = null;
       this.closeEditProduct();
       this.adminUserName = '';
@@ -527,7 +548,7 @@ export class AppComponent implements OnInit {
       this.newProduct = { name: '', description: '', price: 0, image: '', category: '', stock: 0 };
       this.clearProductImage();
       this.savingProduct = false;
-      this.notice = product.name + ' added to the collection.';
+      this.showAdminToast(product.name + ' added to the collection.');
       this.loadProducts();
       this.loadAdminData();
     }, error => {
@@ -649,7 +670,7 @@ export class AppComponent implements OnInit {
       this.cart = this.cart.map(line => line.product.id === id ? { ...line, product: updated } : line);
       this.saveCart();
       this.closeEditProduct();
-      this.notice = updated.name + ' updated.';
+      this.showAdminToast(updated.name + ' updated.');
       this.loadProducts();
     }, error => {
       this.savingProductEdit = false;
@@ -670,7 +691,7 @@ export class AppComponent implements OnInit {
       this.cart = this.cart.filter(line => line.product.id !== product.id);
       this.saveCart();
       this.deletingProductId = null;
-      this.notice = product.name + ' removed from the collection.';
+      this.showAdminToast(product.name + ' removed from the collection.');
       this.loadProducts();
       this.loadAdminData();
     }, error => {
@@ -682,6 +703,7 @@ export class AppComponent implements OnInit {
   setPaymentStatus(order: StoreOrder, status: string): void {
     this.storeApi.updatePaymentStatus(order.id, status).subscribe(updated => {
       order.paymentStatus = updated.paymentStatus;
+      this.showAdminToast('Order #' + order.id + ' payment marked ' + updated.paymentStatus + '.');
       this.loadAdminData();
     }, error => {
       this.errorMessage = this.messageFrom(error, 'Could not update the payment status.');

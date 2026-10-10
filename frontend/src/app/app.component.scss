@@ -712,6 +712,53 @@
   padding: 66px 0 90px;
 }
 
+.admin-update-toast {
+  position: fixed;
+  z-index: 1100;
+  top: 102px;
+  right: clamp(16px, 6vw, 92px);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 12px 13px;
+  border: 1px solid #e7cfae;
+  border-left: 3px solid #b75b2a;
+  border-radius: 8px;
+  background: #fffdf8;
+  box-shadow: 0 12px 30px rgba(75, 48, 32, .16);
+  color: #4c2e1c;
+  font: 600 12px/1.5 'DM Sans', Arial, sans-serif;
+}
+
+.admin-update-icon {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  place-items: center;
+  border-radius: 50%;
+  background: #f4e3c8;
+  color: #975121;
+}
+
+.admin-update-toast button {
+  align-self: flex-start;
+  margin-left: auto;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: #865f48;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .admin-update-toast { top: 82px; right: 12px; left: 12px; max-width: none; }
+}
+
 .admin-heading {
   display: flex;
   align-items: center;

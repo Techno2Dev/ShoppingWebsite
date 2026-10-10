@@ -61,7 +61,11 @@
   <main class="admin-page" *ngIf="adminOpen && adminAuthenticated">
     <div class="admin-heading"><div><span class="eyebrow">SAPANA’S KITCHEN KATTA</span><h1>Store <em>dashboard.</em></h1><p>Signed in as {{ adminUserName }}. Manage products and customer orders.</p></div><div class="admin-heading-actions"><button class="refresh-button" (click)="loadAdminData()">↻ &nbsp;Refresh</button><button class="account-button" type="button" (click)="openAccountSettings()">{{ accountSettingsOpen ? 'Close settings' : 'Change login' }}</button><button class="logout-button" (click)="logoutAdmin()">Sign out</button></div></div>
     <div class="error-banner" *ngIf="errorMessage" role="alert">{{ errorMessage }} <button (click)="errorMessage = ''" aria-label="Dismiss">×</button></div>
-    <div class="notice" *ngIf="notice && !errorMessage" role="status">{{ notice }} <button (click)="notice = ''" aria-label="Dismiss">×</button></div>
+    <div class="admin-update-toast" *ngIf="adminToastMessage" role="status" aria-live="polite">
+      <span class="admin-update-icon" aria-hidden="true">✓</span>
+      <span>{{ adminToastMessage }}</span>
+      <button type="button" (click)="dismissAdminToast()" aria-label="Dismiss admin update notification">×</button>
+    </div>
     <div class="admin-stats" *ngIf="!loadingAdmin"><article><span>ALL ORDERS</span><strong>{{ summary.totalOrders }}</strong><small>All customer orders</small></article><article><span>PAID REVENUE</span><strong>{{ summary.revenue | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong><small>From confirmed payments</small></article><article><span>AWAITING PAYMENT</span><strong>{{ summary.pendingPayments }}</strong><small>Pending admin action</small></article><article><span>PRODUCTS</span><strong>{{ summary.productCount }}</strong><small>Available in your collection</small></article></div>
     <div class="loading-state" *ngIf="loadingAdmin"><span class="spinner"></span> Gathering your numbers…</div>
     <section class="orders-panel"><div class="orders-heading"><div><span class="eyebrow">THE LATEST</span><h2>Recent orders</h2><p class="manual-admin-note">Check UPI receipts against your bank before manually marking an order Paid.</p></div><span>{{ orders.length }} total</span></div>
