@@ -1,6 +1,6 @@
 using backend.Data;
 using backend.Models;
-using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,29 +27,9 @@ frontendOrigins = frontendOrigins
     .ToArray();
 
 builder.Services.AddCors(options => options.AddPolicy("frontend", policy =>
-    policy.WithOrigins(frontendOrigins).AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
-    {
-        options.Cookie.Name = "SapanaKitchen.Admin";
-        options.Cookie.HttpOnly = true;
-        // Render serves the SPA and API from different sites. Cross-site cookies must be Secure + SameSite=None.
-        options.Cookie.SameSite = builder.Environment.IsDevelopment() ? SameSiteMode.Lax : SameSiteMode.None;
-        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
-            ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
-        options.ExpireTimeSpan = TimeSpan.FromHours(8);
-        options.SlidingExpiration = true;
-        options.Events.OnRedirectToLogin = context =>
-        {
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            return Task.CompletedTask;
-        };
-        options.Events.OnRedirectToAccessDenied = context =>
-        {
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            return Task.CompletedTask;
-        };
-    });
+    policy.WithOrigins(frontendOrigins).AllowAnyHeader().AllowAnyMethod()));
+builder.Services.AddAuthentication("AdminBearer")
+    .AddScheme<AuthenticationSchemeOptions, AdminBearerAuthenticationHandler>("AdminBearer", _ => { });
 builder.Services.AddAuthorization(options => options.AddPolicy("AdminOnly", policy =>
     policy.RequireAuthenticatedUser().RequireRole("Admin")));
 
@@ -64,6 +44,8 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<StoreDbContext>();
     db.Database.EnsureCreated();
+    // EnsureCreated does not add new tables to an existing database.
+    db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS \"AdminSessions\" (\"TokenHash\" text PRIMARY KEY, \"AdminUserId\" integer NOT NULL REFERENCES \"AdminUsers\"(\"Id\") ON DELETE CASCADE, \"ExpiresAt\" timestamp with time zone NOT NULL);");
     db.Database.ExecuteSqlRaw("ALTER TABLE \"Orders\" ADD COLUMN IF NOT EXISTS \"PaymentReference\" character varying(100) NULL;");
     db.Database.ExecuteSqlRaw("ALTER TABLE \"Orders\" ADD COLUMN IF NOT EXISTS \"PaymentReportedAt\" timestamp with time zone NULL;");
     db.Database.ExecuteSqlRaw("ALTER TABLE \"Orders\" ADD COLUMN IF NOT EXISTS \"PaymentVerifiedAt\" timestamp with time zone NULL;");

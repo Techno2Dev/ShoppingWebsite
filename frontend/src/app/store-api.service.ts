@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -53,11 +53,36 @@ export interface AdminSummary {
   productCount: number;
 }
 
+export interface AdminSession {
+  userName: string;
+  accessToken: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class StoreApiService {
   private readonly apiUrl = environment.apiUrl;
+  private adminToken = '';
 
-  constructor(private http: HttpClient) { }
+  constructor(private http: HttpClient) {
+    try { this.adminToken = sessionStorage.getItem('sapana-admin-session') || ''; }
+    catch (error) { /* Session storage may be disabled. */ }
+  }
+
+  private adminHeaders(): HttpHeaders {
+    return new HttpHeaders({ Authorization: 'Bearer ' + this.adminToken });
+  }
+
+  private saveAdminToken(token: string): void {
+    this.adminToken = token;
+    try { sessionStorage.setItem('sapana-admin-session', token); }
+    catch (error) { /* Keep the session in memory when storage is unavailable. */ }
+  }
+
+  clearAdminToken(): void {
+    this.adminToken = '';
+    try { sessionStorage.removeItem('sapana-admin-session'); }
+    catch (error) { /* Session storage may be disabled. */ }
+  }
 
   getProducts(): Observable<Product[]> {
     const apiOrigin = new URL(this.apiUrl).origin;
@@ -80,47 +105,56 @@ export class StoreApiService {
     if (imageFile) {
       formData.append('imageFile', imageFile, imageFile.name);
     }
-    return this.http.post<Product>(this.apiUrl + '/admin/products', formData, { withCredentials: true });
+    return this.http.post<Product>(this.apiUrl + '/admin/products', formData, { headers: this.adminHeaders() });
   }
 
   deleteProduct(productId: number): Observable<void> {
-    return this.http.delete<void>(this.apiUrl + '/admin/products/' + productId, { withCredentials: true });
+    return this.http.delete<void>(this.apiUrl + '/admin/products/' + productId, { headers: this.adminHeaders() });
   }
 
   getOrders(): Observable<StoreOrder[]> {
-    return this.http.get<StoreOrder[]>(this.apiUrl + '/orders', { withCredentials: true });
+    return this.http.get<StoreOrder[]>(this.apiUrl + '/orders', { headers: this.adminHeaders() });
   }
 
   getSummary(): Observable<AdminSummary> {
-    return this.http.get<AdminSummary>(this.apiUrl + '/admin/summary', { withCredentials: true });
+    return this.http.get<AdminSummary>(this.apiUrl + '/admin/summary', { headers: this.adminHeaders() });
   }
 
-  adminLogin(userName: string, password: string): Observable<{ userName: string }> {
-    return this.http.post<{ userName: string }>(
+  adminLogin(userName: string, password: string): Observable<AdminSession> {
+    return this.http.post<AdminSession>(
       this.apiUrl + '/admin/auth/login',
-      { userName: userName, password: password },
-      { withCredentials: true }
-    );
+      { userName: userName, password: password }
+    ).pipe(map(session => {
+      this.saveAdminToken(session.accessToken);
+      return session;
+    }));
   }
 
   getAdminSession(): Observable<{ userName: string }> {
-    return this.http.get<{ userName: string }>(this.apiUrl + '/admin/auth/session', { withCredentials: true });
+    return this.http.get<{ userName: string }>(this.apiUrl + '/admin/auth/session', { headers: this.adminHeaders() });
   }
 
   updateAdminCredentials(credentials: {
     currentPassword: string;
     newUserName: string;
     newPassword: string;
-  }): Observable<{ userName: string }> {
-    return this.http.post<{ userName: string }>(
+  }): Observable<AdminSession> {
+    return this.http.post<AdminSession>(
       this.apiUrl + '/admin/auth/credentials',
       credentials,
-      { withCredentials: true }
-    );
+      { headers: this.adminHeaders() }
+    ).pipe(map(session => {
+      this.saveAdminToken(session.accessToken);
+      return session;
+    }));
   }
 
   adminLogout(): Observable<void> {
-    return this.http.post<void>(this.apiUrl + '/admin/auth/logout', {}, { withCredentials: true });
+    return this.http.post<void>(this.apiUrl + '/admin/auth/logout', {}, { headers: this.adminHeaders() })
+      .pipe(map(result => {
+        this.clearAdminToken();
+        return result;
+      }));
   }
 
   createOrder(order: {
@@ -149,7 +183,7 @@ export class StoreApiService {
     return this.http.post<StoreOrder>(
       this.apiUrl + '/admin/orders/' + orderId + '/payment-status',
       { paymentStatus: paymentStatus },
-      { withCredentials: true }
+      { headers: this.adminHeaders() }
     );
   }
 }

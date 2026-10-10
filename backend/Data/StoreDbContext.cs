@@ -9,6 +9,7 @@ public sealed class StoreDbContext(DbContextOptions<StoreDbContext> options) : D
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
+    public DbSet<AdminSession> AdminSessions => Set<AdminSession>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -19,5 +20,8 @@ public sealed class StoreDbContext(DbContextOptions<StoreDbContext> options) : D
         modelBuilder.Entity<OrderItem>().Property(item => item.UnitPrice).HasPrecision(10, 2);
         modelBuilder.Entity<Order>().HasMany(order => order.Items).WithOne().HasForeignKey(item => item.OrderId);
         modelBuilder.Entity<AdminUser>().HasIndex(user => user.NormalizedUserName).IsUnique();
+        modelBuilder.Entity<AdminSession>().HasKey(session => session.TokenHash);
+        modelBuilder.Entity<AdminSession>().HasOne(session => session.AdminUser).WithMany()
+            .HasForeignKey(session => session.AdminUserId).OnDelete(DeleteBehavior.Cascade);
     }
 }

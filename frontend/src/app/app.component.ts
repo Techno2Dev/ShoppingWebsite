@@ -231,6 +231,7 @@ export class AppComponent implements OnInit {
     }, () => {
       this.adminAuthenticated = false;
       this.adminUserName = '';
+      this.storeApi.clearAdminToken();
     });
   }
 
@@ -248,7 +249,8 @@ export class AppComponent implements OnInit {
       }, () => {
         this.adminAuthenticated = false;
         this.loggingAdminLogin = false;
-        this.errorMessage = 'Sign-in succeeded, but your browser did not retain the admin session. Allow cookies for the store API and try again.';
+        this.storeApi.clearAdminToken();
+        this.errorMessage = 'Sign-in succeeded, but the admin session could not be verified. Please try signing in again.';
       });
     }, error => {
       this.loggingAdminLogin = false;
@@ -459,9 +461,10 @@ export class AppComponent implements OnInit {
     if (error.status === 401) {
       this.adminAuthenticated = false;
       this.adminUserName = '';
+      this.storeApi.clearAdminToken();
       this.orders = [];
       this.adminProducts = [];
-      this.errorMessage = 'Your admin session is unavailable. Sign in again; if it persists, allow cookies for the store API.';
+      this.errorMessage = 'Your admin session has expired or was revoked. Please sign in again.';
     } else {
       this.errorMessage = this.messageFrom(error, fallback);
     }

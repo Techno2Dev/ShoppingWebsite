@@ -1,8 +1,6 @@
 using System.Security.Claims;
 using backend.Data;
 using backend.Models;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -23,25 +21,26 @@ public sealed class AdminAuthController(StoreDbContext db) : ControllerBase
         }
 
         var normalizedUserName = request.UserName.Trim().ToUpperInvariant();
-        var user = await db.AdminUsers.AsNoTracking()
+        var user = await db.AdminUsers
             .SingleOrDefaultAsync(admin => admin.NormalizedUserName == normalizedUserName, cancellationToken);
         if (user is null || !PasswordHashing.Verify(request.Password, user.PasswordHash))
         {
             return Unauthorized(new { message = "Username or password is incorrect." });
         }
 
-        var claims = new List<Claim>
+        await db.AdminSessions.Where(session => session.ExpiresAt <= DateTime.UtcNow)
+            .ExecuteDeleteAsync(cancellationToken);
+        var accessToken = AdminSessionTokens.Create();
+        db.AdminSessions.Add(new AdminSession
         {
-            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new(ClaimTypes.Name, user.UserName),
-            new(ClaimTypes.Role, "Admin")
-        };
-        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-        await HttpContext.SignInAsync(
-            CookieAuthenticationDefaults.AuthenticationScheme,
-            new ClaimsPrincipal(identity));
-
-        return Ok(new { userName = user.UserName });
+            TokenHash = AdminSessionTokens.Hash(accessToken),
+            AdminUserId = user.Id,
+            AdminUser = user,
+            ExpiresAt = DateTime.UtcNow.AddHours(8)
+        });
+        await db.SaveChangesAsync(cancellationToken);
+        Response.Headers.CacheControl = "no-store";
+        return Ok(new { userName = user.UserName, accessToken });
     }
 
     [Authorize(Policy = "AdminOnly")]
@@ -80,27 +79,30 @@ public sealed class AdminAuthController(StoreDbContext db) : ControllerBase
         user.UserName = userName;
         user.NormalizedUserName = normalizedUserName;
         user.PasswordHash = PasswordHashing.Hash(request.NewPassword);
-        await db.SaveChangesAsync(cancellationToken);
-
-        var claims = new List<Claim>
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        await db.AdminSessions.Where(session => session.AdminUserId == userId)
+            .ExecuteDeleteAsync(cancellationToken);
+        var accessToken = AdminSessionTokens.Create();
+        db.AdminSessions.Add(new AdminSession
         {
-            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new(ClaimTypes.Name, user.UserName),
-            new(ClaimTypes.Role, "Admin")
-        };
-        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-        await HttpContext.SignInAsync(
-            CookieAuthenticationDefaults.AuthenticationScheme,
-            new ClaimsPrincipal(identity));
-
-        return Ok(new { userName = user.UserName });
+            TokenHash = AdminSessionTokens.Hash(accessToken),
+            AdminUserId = user.Id,
+            AdminUser = user,
+            ExpiresAt = DateTime.UtcNow.AddHours(8)
+        });
+        await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        Response.Headers.CacheControl = "no-store";
+        return Ok(new { userName = user.UserName, accessToken });
     }
 
     [Authorize(Policy = "AdminOnly")]
     [HttpPost("logout")]
-    public async Task<IActionResult> Logout()
+    public async Task<IActionResult> Logout(CancellationToken cancellationToken)
     {
-        await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        var token = Request.Headers.Authorization.ToString()[7..].Trim();
+        await db.AdminSessions.Where(session => session.TokenHash == AdminSessionTokens.Hash(token))
+            .ExecuteDeleteAsync(cancellationToken);
         return NoContent();
     }
 }
