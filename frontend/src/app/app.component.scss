@@ -1599,6 +1599,15 @@ td small {
 .payment-expired strong,.payment-failed strong{
   color:#912c20
 }
+.cancel-order{
+  margin:14px 0;padding:12px;border:1px solid #e8cfc0;border-radius:6px;background:#fff9f4;text-align:left
+}
+.cancel-order p{
+  margin:0 0 10px;color:#684a36;font-size:11px;line-height:1.6
+}
+.cancel-order button:disabled{
+  opacity:.6;cursor:not-allowed
+}
 .payment-report-form{
   margin-top:14px;text-align:left
 }
@@ -1645,6 +1654,9 @@ td small {
   background:#fff0d1;color:#81530d
 }
 .status-expired{
+  background:#f7e4e0;color:#8f3529
+}
+.status-cancelled{
   background:#f7e4e0;color:#8f3529
 }
 @media(max-width:600px){

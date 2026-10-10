@@ -40,6 +40,7 @@ export class AppComponent implements OnInit {
   paymentAccessToken = '';
   paymentTransactionReference = '';
   reportingUpiPayment = false;
+  cancellingOrder = false;
   paymentStatusError = '';
   paymentReportMessage = '';
   upiCopyMessage = '';
@@ -368,7 +369,7 @@ export class AppComponent implements OnInit {
       this.createUpiPaymentQr(order);
       this.adminOpen = false;
       this.cartOpen = false;
-      if (['Paid', 'Failed', 'Refunded'].indexOf(order.paymentStatus) >= 0) {
+      if (['Paid', 'Failed', 'Refunded', 'Cancelled'].indexOf(order.paymentStatus) >= 0) {
         this.clearPendingPayment();
       }
     }, error => {
@@ -377,7 +378,8 @@ export class AppComponent implements OnInit {
   }
 
   reportUpiPayment(): void {
-    if (!this.currentOrder || !this.paymentAccessToken || !this.paymentCanBeReported || this.reportingUpiPayment) { return; }
+    if (!this.currentOrder || !this.paymentAccessToken || !this.paymentCanBeReported ||
+        this.reportingUpiPayment || this.cancellingOrder) { return; }
     this.reportingUpiPayment = true;
     this.paymentStatusError = '';
     this.paymentReportMessage = '';
@@ -393,6 +395,26 @@ export class AppComponent implements OnInit {
     }, error => {
       this.reportingUpiPayment = false;
       this.paymentStatusError = this.messageFrom(error, 'Could not report the UPI reference. Please try again.');
+    });
+  }
+
+  cancelOrder(): void {
+    if (!this.currentOrder || !this.paymentAccessToken || this.cancellingOrder || this.reportingUpiPayment ||
+        this.currentOrder.paymentStatus !== 'Pending' || this.currentOrder.paymentReportedAt ||
+        !window.confirm('Cancel this unpaid order and release its reserved stock? Do not cancel if you have already sent money.')) {
+      return;
+    }
+
+    this.cancellingOrder = true;
+    this.paymentStatusError = '';
+    this.storeApi.cancelOrder(this.currentOrder.id, this.paymentAccessToken).subscribe(order => {
+      this.currentOrder = order;
+      this.cancellingOrder = false;
+      this.clearPendingPayment();
+      this.loadProducts();
+    }, error => {
+      this.cancellingOrder = false;
+      this.paymentStatusError = this.messageFrom(error, 'Could not cancel this order. Refresh its status and try again.');
     });
   }
 

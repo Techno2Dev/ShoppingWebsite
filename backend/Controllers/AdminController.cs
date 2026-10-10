@@ -102,7 +102,7 @@ public sealed class AdminController(StoreDbContext db) : ControllerBase
         }
 
         var nextStatus = allowed.First(status => status.Equals(request.PaymentStatus, StringComparison.OrdinalIgnoreCase));
-        if (order.PaymentStatus is "Failed" or "Refunded" or "Expired" ||
+        if (order.PaymentStatus is "Failed" or "Refunded" or "Expired" or "Cancelled" ||
             (order.PaymentStatus == "Paid" && nextStatus != "Refunded"))
         {
             return Conflict(new { message = "This order is already in a terminal payment state and cannot be changed here." });

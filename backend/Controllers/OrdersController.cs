@@ -147,6 +147,46 @@ public sealed class OrdersController(StoreDbContext db) : ControllerBase
         return Ok(ToCustomerStatus(order));
     }
 
+    [AllowAnonymous]
+    [HttpPost("{id:int}/cancel")]
+    public async Task<ActionResult<CustomerOrderStatusResponse>> Cancel(
+        int id,
+        ReportUpiPaymentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var order = await db.Orders.AsNoTracking().Include(candidate => candidate.Items)
+            .SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+        if (order is null || !HasValidAccessToken(order, request.AccessToken))
+        {
+            return NotFound();
+        }
+
+        if (order.PaymentStatus != "Pending" || order.PaymentReportedAt is not null ||
+            !string.IsNullOrWhiteSpace(order.PaymentReference))
+        {
+            return Conflict(new { message = "This order cannot be cancelled online. If you have already paid, contact the store." });
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var updatedRows = await db.Orders.Where(candidate => candidate.Id == id &&
+                candidate.PaymentStatus == "Pending" && candidate.PaymentReportedAt == null && candidate.PaymentReference == null)
+            .ExecuteUpdateAsync(update => update.SetProperty(candidate => candidate.PaymentStatus, "Cancelled"), cancellationToken);
+        if (updatedRows == 0)
+        {
+            return Conflict(new { message = "The order changed. Refresh its payment status; if you paid, contact the store." });
+        }
+
+        foreach (var item in order.Items)
+        {
+            await db.Products.Where(product => product.Id == item.ProductId)
+                .ExecuteUpdateAsync(update => update.SetProperty(product => product.Stock,
+                    product => product.Stock + item.Quantity), cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return Ok(ToCustomerStatus(order) with { PaymentStatus = "Cancelled" });
+    }
+
     private static bool HasValidAccessToken(Order order, string accessToken)
     {
         if (string.IsNullOrWhiteSpace(order.PaymentAccessTokenHash) || string.IsNullOrWhiteSpace(accessToken))

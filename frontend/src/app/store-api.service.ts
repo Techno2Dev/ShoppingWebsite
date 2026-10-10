@@ -179,6 +179,12 @@ export class StoreApiService {
     });
   }
 
+  cancelOrder(orderId: number, accessToken: string): Observable<StoreOrder> {
+    return this.http.post<StoreOrder>(this.apiUrl + '/orders/' + orderId + '/cancel', {
+      accessToken: accessToken
+    });
+  }
+
   updatePaymentStatus(orderId: number, paymentStatus: string): Observable<StoreOrder> {
     return this.http.post<StoreOrder>(
       this.apiUrl + '/admin/orders/' + orderId + '/payment-status',
