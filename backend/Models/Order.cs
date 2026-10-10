@@ -7,6 +7,9 @@ public sealed class Order
     public required string Email { get; set; }
     public required string Address { get; set; }
     public string PaymentStatus { get; set; } = "Pending";
+    public string PaymentMethod { get; set; } = "UPI";
+    public string? RazorpayOrderId { get; set; }
+    public string? RazorpayPaymentId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public decimal Total { get; set; }
     public string? PaymentReference { get; set; }

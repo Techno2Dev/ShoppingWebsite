@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit } from '@angular/core';
+import { Component, HostListener, NgZone, OnInit } from '@angular/core';
 import { animate, group, query, style, transition, trigger } from '@angular/animations';
 import * as QRCode from 'qrcode';
 import { environment } from '../environments/environment';
@@ -63,6 +63,13 @@ export class AppComponent implements OnInit {
   newAdminPassword = '';
   loadingProducts = true;
   submittingOrder = false;
+  paymentMethod: 'UPI' | 'Razorpay' = 'UPI';
+  razorpayAvailable = false;
+  openingRazorpay = false;
+  checkingRazorpayStatus = false;
+  private razorpayStatusTimer: number | null = null;
+  private razorpayCheckId = 0;
+  private razorpayScriptPromise: Promise<void> | null = null;
   loadingAdmin = false;
   notice = '';
   noticeVisible = false;
@@ -116,12 +123,13 @@ export class AppComponent implements OnInit {
   email = '';
   address = '';
 
-  constructor(private storeApi: StoreApiService) { }
+  constructor(private storeApi: StoreApiService, private zone: NgZone) { }
 
   ngOnInit(): void {
     this.restoreCart();
     this.restorePendingPayment();
     this.loadProducts();
+    this.storeApi.razorpayAvailability().subscribe(result => { this.razorpayAvailable = result.enabled; }, () => { this.razorpayAvailable = false; });
   }
 
   get categories(): string[] {
@@ -288,6 +296,7 @@ export class AppComponent implements OnInit {
       customerName: this.customerName.trim(),
       email: this.email.trim(),
       address: this.address.trim(),
+      paymentMethod: this.paymentMethod,
       items: this.cart.map(line => ({ productId: line.product.id, quantity: line.quantity }))
     }).subscribe(order => {
       this.orderSuccessId = order.id;
@@ -296,7 +305,7 @@ export class AppComponent implements OnInit {
       this.paymentTransactionReference = '';
       this.paymentStatusError = '';
       this.paymentReportMessage = '';
-      this.createUpiPaymentQr(order);
+      if (order.paymentMethod !== 'Razorpay') { this.createUpiPaymentQr(order); }
       this.savePendingPayment(order.id, order.accessToken);
       this.adminOpen = false;
       this.cartOpen = false;
@@ -308,6 +317,7 @@ export class AppComponent implements OnInit {
       this.saveCart();
       this.submittingOrder = false;
       this.loadProducts();
+      if (order.paymentMethod === 'Razorpay') { this.payWithRazorpay(); }
     }, error => {
       this.submittingOrder = false;
       this.errorMessage = this.messageFrom(error, 'We could not place your order. Please check your details and try again.');
@@ -488,7 +498,140 @@ export class AppComponent implements OnInit {
   }
 
   get paymentCanBeReported(): boolean {
-    return !!this.currentOrder && this.currentOrder.paymentStatus === 'Pending';
+    return !!this.currentOrder && this.currentOrder.paymentMethod !== 'Razorpay' && this.currentOrder.paymentStatus === 'Pending';
+  }
+
+  payWithRazorpay(): void {
+    if (!this.currentOrder || !this.paymentAccessToken || this.currentOrder.paymentMethod !== 'Razorpay' ||
+        this.currentOrder.paymentStatus !== 'Pending' || this.openingRazorpay) { return; }
+    const order = this.currentOrder;
+    this.stopRazorpayStatusChecks();
+    this.openingRazorpay = true;
+    this.paymentStatusError = '';
+    this.paymentReportMessage = '';
+    this.storeApi.startRazorpay(order.id, this.paymentAccessToken).subscribe(checkout => {
+      this.loadRazorpayScript().then(() => {
+        this.zone.run(() => {
+          this.openingRazorpay = false;
+          const Razorpay = (window as any).Razorpay;
+          let checkoutSucceeded = false;
+          let checkoutFailed = false;
+          const widget = new Razorpay({
+            key: checkout.keyId,
+            amount: checkout.amount,
+            currency: checkout.currency,
+            order_id: checkout.orderId,
+            name: 'Sapana’s Kitchen Katta',
+            description: 'Test payment for order #' + order.id,
+            theme: { color: '#bd2b1d' },
+            handler: (result: any) => this.zone.run(() => {
+              checkoutSucceeded = true;
+              this.stopRazorpayStatusChecks();
+              this.openingRazorpay = true;
+              this.paymentStatusError = '';
+              if (result.razorpay_order_id !== checkout.orderId || !result.razorpay_payment_id || !result.razorpay_signature) {
+                this.openingRazorpay = false;
+                this.paymentStatusError = 'Checking payment with Razorpay…';
+                this.startRazorpayStatusChecks(order.id);
+                return;
+              }
+              this.storeApi.verifyRazorpay(order.id, this.paymentAccessToken, result.razorpay_payment_id,
+                result.razorpay_signature).subscribe(() => {
+                this.openingRazorpay = false;
+                this.markRazorpayPaid(order.id);
+              }, error => {
+                this.openingRazorpay = false;
+                this.paymentStatusError = this.messageFrom(error, 'Waiting for Razorpay to confirm the captured payment.');
+                this.startRazorpayStatusChecks(order.id);
+              });
+            }),
+            modal: {
+              ondismiss: () => this.zone.run(() => {
+                if (!checkoutSucceeded && !checkoutFailed) {
+                  this.paymentStatusError = 'Checkout closed. Checking for a completed payment; you can retry if it remains Pending.';
+                  this.startRazorpayStatusChecks(order.id);
+                }
+              })
+            }
+          });
+          widget.on('payment.failed', () => this.zone.run(() => {
+            checkoutFailed = true;
+            this.paymentStatusError = 'Razorpay test payment failed. No payment is marked Paid; you can retry.';
+            this.startRazorpayStatusChecks(order.id);
+          }));
+          widget.open();
+        });
+      }).catch(() => this.zone.run(() => {
+        this.openingRazorpay = false;
+        this.paymentStatusError = 'Razorpay checkout could not load. Try again.';
+      }));
+    }, error => {
+      this.openingRazorpay = false;
+      this.paymentStatusError = this.messageFrom(error, 'Razorpay checkout is unavailable. Try again.');
+    });
+  }
+
+  private markRazorpayPaid(orderId: number): void {
+    if (!this.currentOrder || this.currentOrder.id !== orderId) { return; }
+    this.stopRazorpayStatusChecks();
+    this.currentOrder.paymentStatus = 'Paid';
+    this.paymentStatusError = '';
+    this.paymentReportMessage = 'Razorpay test payment captured and verified.';
+    this.clearPendingPayment();
+  }
+
+  private stopRazorpayStatusChecks(): void {
+    this.razorpayCheckId++;
+    if (this.razorpayStatusTimer !== null) {
+      window.clearTimeout(this.razorpayStatusTimer);
+      this.razorpayStatusTimer = null;
+    }
+    this.checkingRazorpayStatus = false;
+  }
+
+  private startRazorpayStatusChecks(orderId: number): void {
+    if (!this.currentOrder || this.currentOrder.id !== orderId || this.currentOrder.paymentStatus !== 'Pending') { return; }
+    this.stopRazorpayStatusChecks();
+    const checkId = this.razorpayCheckId;
+    const accessToken = this.paymentAccessToken;
+    this.checkingRazorpayStatus = true;
+    const check = (attempt: number) => {
+      this.storeApi.getCustomerOrderStatus(orderId, accessToken).subscribe(status => {
+        if (checkId !== this.razorpayCheckId || !this.currentOrder || this.currentOrder.id !== orderId) { return; }
+        if (status.paymentStatus === 'Paid') {
+          this.markRazorpayPaid(orderId);
+        } else if (attempt < 10 && status.paymentStatus === 'Pending') {
+          this.razorpayStatusTimer = window.setTimeout(() => check(attempt + 1), 2000);
+        } else {
+          this.checkingRazorpayStatus = false;
+          this.currentOrder = status;
+        }
+      }, () => {
+        if (checkId !== this.razorpayCheckId) { return; }
+        if (attempt < 10) {
+          this.razorpayStatusTimer = window.setTimeout(() => check(attempt + 1), 2000);
+        } else {
+          this.checkingRazorpayStatus = false;
+          this.paymentStatusError = 'Could not confirm payment automatically. Please refresh your order status later.';
+        }
+      });
+    };
+    check(1);
+  }
+
+  private loadRazorpayScript(): Promise<void> {
+    if ((window as any).Razorpay) { return Promise.resolve(); }
+    if (!this.razorpayScriptPromise) {
+      this.razorpayScriptPromise = new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => { script.remove(); this.razorpayScriptPromise = null; reject(); };
+        document.head.appendChild(script);
+      });
+    }
+    return this.razorpayScriptPromise;
   }
 
   get paymentHasBeenReported(): boolean {
@@ -502,7 +645,7 @@ export class AppComponent implements OnInit {
       this.currentOrder = order;
       this.orderSuccessId = order.id;
       this.paymentAccessToken = accessToken;
-      this.createUpiPaymentQr(order);
+      if (order.paymentMethod !== 'Razorpay') { this.createUpiPaymentQr(order); }
       this.adminOpen = false;
       this.cartOpen = false;
       if (['Paid', 'Failed', 'Refunded', 'Cancelled'].indexOf(order.paymentStatus) >= 0) {

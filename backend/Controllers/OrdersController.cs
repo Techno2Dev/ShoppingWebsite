@@ -9,7 +9,7 @@ namespace backend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier telegram) : ControllerBase
+public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier telegram, RazorpayTestGateway razorpay) : ControllerBase
 {
     [HttpGet]
     [Authorize(Policy = "AdminOnly")]
@@ -46,6 +46,10 @@ public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier te
         {
             return BadRequest(new { message = "Enter customer details and at least one valid item." });
         }
+        if (request.PaymentMethod is not ("UPI" or "Razorpay"))
+            return BadRequest(new { message = "Choose UPI or Razorpay." });
+        if (request.PaymentMethod == "Razorpay" && !razorpay.Enabled)
+            return BadRequest(new { message = "Razorpay test payments are not configured. Choose UPI instead." });
 
         var requestedItems = request.Items
             .GroupBy(item => item.ProductId)
@@ -70,6 +74,7 @@ public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier te
             Email = request.Email.Trim(),
             Address = request.Address.Trim(),
             PaymentStatus = "Pending",
+            PaymentMethod = request.PaymentMethod,
             PaymentAccessTokenHash = OrderPaymentSecurity.HashAccessToken(accessToken),
             Items = requestedItems.Select(item => new OrderItem
             {
@@ -80,6 +85,8 @@ public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier te
             }).ToList()
         };
         order.Total = order.Items.Sum(item => item.UnitPrice * item.Quantity);
+        if (order.PaymentMethod == "Razorpay" && order.Total < 1m)
+            return BadRequest(new { message = "Razorpay requires an order of at least ₹1." });
 
         await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
         {
@@ -101,7 +108,8 @@ public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier te
             order.CreatedAt,
             order.PaymentStatus,
             order.Items,
-            accessToken);
+            accessToken,
+            order.PaymentMethod);
         return Created($"/api/orders/{order.Id}/payment-status", response);
     }
 
@@ -117,6 +125,28 @@ public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier te
         if (order is null || !HasValidAccessToken(order, request.AccessToken))
         {
             return NotFound();
+        }
+
+        if (order.PaymentMethod == "Razorpay" && order.PaymentStatus == "Pending" && order.RazorpayOrderId is not null)
+        {
+            try
+            {
+                var capturedId = await razorpay.FindCapturedPaymentAsync(order.RazorpayOrderId, order.Total, cancellationToken);
+                if (capturedId is not null)
+                {
+                    await db.Orders.Where(item => item.Id == id && item.PaymentStatus == "Pending" &&
+                            item.PaymentMethod == "Razorpay" && item.RazorpayOrderId == order.RazorpayOrderId && item.RazorpayPaymentId == null)
+                        .ExecuteUpdateAsync(update => update.SetProperty(item => item.PaymentStatus, "Paid")
+                            .SetProperty(item => item.RazorpayPaymentId, capturedId)
+                            .SetProperty(item => item.PaymentVerifiedAt, (DateTime?)DateTime.UtcNow)
+                            .SetProperty(item => item.PaymentVerifiedBy, "Razorpay (captured)"), cancellationToken);
+                    await db.Entry(order).ReloadAsync(cancellationToken);
+                }
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+            {
+                // Keep payment Pending until Razorpay can be reached again; do not block order status access.
+            }
         }
 
         return Ok(ToCustomerStatus(order));
@@ -136,7 +166,7 @@ public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier te
             return NotFound();
         }
 
-        if (order.PaymentStatus != "Pending")
+        if (order.PaymentMethod != "UPI" || order.PaymentStatus != "Pending")
         {
             return Conflict(new { message = "An admin has already changed this order's payment status." });
         }
@@ -149,7 +179,7 @@ public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier te
         var reportedAt = DateTime.UtcNow;
         var paymentReference = transactionReference;
         var updatedRows = await db.Orders
-            .Where(candidate => candidate.Id == id && candidate.PaymentStatus == "Pending")
+            .Where(candidate => candidate.Id == id && candidate.PaymentMethod == "UPI" && candidate.PaymentStatus == "Pending")
             .ExecuteUpdateAsync(update => update
                 .SetProperty(candidate => candidate.PaymentReference, paymentReference)
                 .SetProperty(candidate => candidate.PaymentReportedAt, (DateTime?)reportedAt), cancellationToken);
@@ -177,7 +207,7 @@ public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier te
             return NotFound();
         }
 
-        if (order.PaymentStatus != "Pending" || order.PaymentReportedAt is not null ||
+        if (order.PaymentStatus != "Pending" || order.RazorpayOrderId is not null || order.PaymentReportedAt is not null ||
             !string.IsNullOrWhiteSpace(order.PaymentReference))
         {
             return Conflict(new { message = "This order cannot be cancelled online. If you have already paid, contact the store." });
@@ -185,7 +215,7 @@ public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier te
 
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         var updatedRows = await db.Orders.Where(candidate => candidate.Id == id &&
-                candidate.PaymentStatus == "Pending" && candidate.PaymentReportedAt == null && candidate.PaymentReference == null)
+                candidate.PaymentStatus == "Pending" && candidate.RazorpayOrderId == null && candidate.PaymentReportedAt == null && candidate.PaymentReference == null)
             .ExecuteUpdateAsync(update => update.SetProperty(candidate => candidate.PaymentStatus, "Cancelled"), cancellationToken);
         if (updatedRows == 0)
         {
@@ -223,5 +253,6 @@ public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier te
         order.PaymentStatus,
         order.PaymentReference,
         order.PaymentReportedAt,
-        order.Items);
+        order.Items,
+        order.PaymentMethod);
 }

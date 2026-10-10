@@ -35,6 +35,8 @@ export interface StoreOrder {
   email: string;
   address: string;
   paymentStatus: string;
+  paymentMethod: 'UPI' | 'Razorpay';
+  razorpayPaymentId?: string | null;
   createdAt: string;
   paymentReference?: string | null;
   paymentReportedAt?: string | null;
@@ -185,9 +187,24 @@ export class StoreApiService {
     customerName: string;
     email: string;
     address: string;
+    paymentMethod: 'UPI' | 'Razorpay';
     items: { productId: number; quantity: number }[];
   }): Observable<CreatedStoreOrder> {
     return this.http.post<CreatedStoreOrder>(this.apiUrl + '/orders', order);
+  }
+
+  razorpayAvailability(): Observable<{ enabled: boolean }> {
+    return this.http.get<{ enabled: boolean }>(this.apiUrl + '/razorpay/availability');
+  }
+
+  startRazorpay(orderId: number, accessToken: string): Observable<{ keyId: string; orderId: string; amount: number; currency: string }> {
+    return this.http.post<{ keyId: string; orderId: string; amount: number; currency: string }>(
+      this.apiUrl + '/razorpay/orders/' + orderId + '/checkout', { accessToken: accessToken });
+  }
+
+  verifyRazorpay(orderId: number, accessToken: string, paymentId: string, signature: string): Observable<{ paymentStatus: string }> {
+    return this.http.post<{ paymentStatus: string }>(this.apiUrl + '/razorpay/orders/' + orderId + '/verify',
+      { accessToken: accessToken, paymentId: paymentId, signature: signature });
   }
 
   getCustomerOrderStatus(orderId: number, accessToken: string): Observable<StoreOrder> {

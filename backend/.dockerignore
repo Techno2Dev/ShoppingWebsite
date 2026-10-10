@@ -6,3 +6,5 @@ store.db-wal
 *.user
 *.suo
 .vs/
+appsettings.Local.json
+appsettings.*.Local.json

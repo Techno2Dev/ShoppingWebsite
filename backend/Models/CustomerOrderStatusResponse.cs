@@ -7,4 +7,5 @@ public sealed record CustomerOrderStatusResponse(
     string PaymentStatus,
     string? PaymentReference,
     DateTime? PaymentReportedAt,
-    List<OrderItem> Items);
+    List<OrderItem> Items,
+    string PaymentMethod);

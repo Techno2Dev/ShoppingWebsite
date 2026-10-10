@@ -163,6 +163,8 @@ public sealed class AdminController(StoreDbContext db) : ControllerBase
         }
 
         var nextStatus = allowed.First(status => status.Equals(request.PaymentStatus, StringComparison.OrdinalIgnoreCase));
+        if (order.PaymentMethod == "Razorpay" && nextStatus != "Pending")
+            return Conflict(new { message = "Razorpay test orders are verified automatically. Handle refunds in the Razorpay dashboard." });
         if (order.PaymentStatus is "Failed" or "Refunded" or "Expired" or "Cancelled" ||
             (order.PaymentStatus == "Paid" && nextStatus != "Refunded"))
         {

@@ -6,4 +6,5 @@ public sealed record CreateOrderResponse(
     DateTime CreatedAt,
     string PaymentStatus,
     List<OrderItem> Items,
-    string AccessToken);
+    string AccessToken,
+    string PaymentMethod);

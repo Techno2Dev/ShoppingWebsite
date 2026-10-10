@@ -6,6 +6,14 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+if (builder.Environment.IsDevelopment())
+{
+    // Local test keys stay outside Git and never load on Render/Production.
+    builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+    builder.Configuration.AddEnvironmentVariables();
+    builder.Configuration.AddCommandLine(args);
+}
+
 builder.Services.AddControllers();
 var storeConnectionString = builder.Configuration.GetConnectionString("Store");
 if (string.IsNullOrWhiteSpace(storeConnectionString))
@@ -17,6 +25,7 @@ storeConnectionString = PostgresConnectionString.Normalize(storeConnectionString
 builder.Services.AddDbContext<StoreDbContext>(options =>
     options.UseNpgsql(storeConnectionString));
 builder.Services.AddSingleton<TelegramOrderNotifier>();
+builder.Services.AddHttpClient<RazorpayTestGateway>(client => client.Timeout = TimeSpan.FromSeconds(12));
 var frontendOrigins = builder.Configuration.GetSection("FrontendOrigins").Get<string[]>() ??
     (builder.Configuration["FrontendOrigin"] is { Length: > 0 } configuredOrigin
         ? configuredOrigin.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -52,6 +61,11 @@ using (var scope = app.Services.CreateScope())
     db.Database.ExecuteSqlRaw("ALTER TABLE \"Orders\" ADD COLUMN IF NOT EXISTS \"PaymentVerifiedAt\" timestamp with time zone NULL;");
     db.Database.ExecuteSqlRaw("ALTER TABLE \"Orders\" ADD COLUMN IF NOT EXISTS \"PaymentVerifiedBy\" character varying(100) NULL;");
     db.Database.ExecuteSqlRaw("ALTER TABLE \"Orders\" ADD COLUMN IF NOT EXISTS \"PaymentAccessTokenHash\" text NULL;");
+    db.Database.ExecuteSqlRaw("ALTER TABLE \"Orders\" ADD COLUMN IF NOT EXISTS \"PaymentMethod\" text NOT NULL DEFAULT 'UPI';");
+    db.Database.ExecuteSqlRaw("ALTER TABLE \"Orders\" ADD COLUMN IF NOT EXISTS \"RazorpayOrderId\" text NULL;");
+    db.Database.ExecuteSqlRaw("ALTER TABLE \"Orders\" ADD COLUMN IF NOT EXISTS \"RazorpayPaymentId\" text NULL;");
+    db.Database.ExecuteSqlRaw("CREATE UNIQUE INDEX IF NOT EXISTS \"IX_Orders_RazorpayOrderId\" ON \"Orders\" (\"RazorpayOrderId\");");
+    db.Database.ExecuteSqlRaw("CREATE UNIQUE INDEX IF NOT EXISTS \"IX_Orders_RazorpayPaymentId\" ON \"Orders\" (\"RazorpayPaymentId\");");
     db.Database.ExecuteSqlRaw("UPDATE \"Orders\" SET \"PaymentStatus\" = 'Pending' WHERE \"PaymentStatus\" = 'PaymentReported';");
 
     var configuredAdminUserName = builder.Configuration["Admin:UserName"];
