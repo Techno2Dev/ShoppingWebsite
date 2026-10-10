@@ -42,6 +42,13 @@ export interface StoreOrder {
   items: OrderItem[];
 }
 
+export interface OrderPage {
+  items: StoreOrder[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface CreatedStoreOrder extends StoreOrder {
   accessToken: string;
 }
@@ -127,8 +134,10 @@ export class StoreApiService {
     return this.http.delete<void>(this.apiUrl + '/admin/products/' + productId, { headers: this.adminHeaders() });
   }
 
-  getOrders(): Observable<StoreOrder[]> {
-    return this.http.get<StoreOrder[]>(this.apiUrl + '/orders', { headers: this.adminHeaders() });
+  getOrders(page: number = 1): Observable<OrderPage> {
+    return this.http.get<OrderPage>(this.apiUrl + '/orders', {
+      headers: this.adminHeaders(), params: { page: String(page) }
+    });
   }
 
   getSummary(): Observable<AdminSummary> {

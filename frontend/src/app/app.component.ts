@@ -50,6 +50,11 @@ export class AppComponent implements OnInit {
   upiPaymentLink = '';
   qrGenerationError = '';
   orders: StoreOrder[] = [];
+  ordersPage = 1;
+  ordersPageSize = 25;
+  ordersTotal = 0;
+  loadingOrders = false;
+  private ordersRequestId = 0;
   selectedAdminOrder: StoreOrder | null = null;
   adminProducts: Product[] = [];
   savingProduct = false;
@@ -501,18 +506,48 @@ export class AppComponent implements OnInit {
       this.loadingAdmin = false;
       this.handleAdminDataError(error, 'Could not load the admin dashboard.');
     });
-    this.storeApi.getOrders().subscribe(orders => {
-      this.orders = orders;
-      if (this.selectedAdminOrder) {
-        this.selectedAdminOrder = orders.find(order => order.id === this.selectedAdminOrder.id) || null;
-      }
-    }, error => {
-      this.handleAdminDataError(error, 'Could not load recent orders.');
-    });
+    this.loadOrdersPage(this.ordersPage);
     this.storeApi.getProducts().subscribe(products => {
       this.adminProducts = products;
     }, error => {
       this.handleAdminDataError(error, 'Could not load the product collection.');
+    });
+  }
+
+  get ordersPageCount(): number {
+    return Math.ceil(this.ordersTotal / this.ordersPageSize);
+  }
+
+  showOrderHistory(): void {
+    this.selectedAdminOrder = null;
+    this.loadOrdersPage(2);
+  }
+
+  showRecentOrders(): void {
+    this.selectedAdminOrder = null;
+    this.loadOrdersPage(1);
+  }
+
+  loadOrdersPage(page: number): void {
+    if (page < 1 || (this.ordersTotal > 0 && page > this.ordersPageCount)) {
+      return;
+    }
+    const requestId = ++this.ordersRequestId;
+    this.loadingOrders = true;
+    this.storeApi.getOrders(page).subscribe(result => {
+      if (requestId !== this.ordersRequestId) { return; }
+      this.orders = result.items;
+      this.ordersTotal = result.totalCount;
+      this.ordersPageSize = result.pageSize;
+      this.ordersPage = result.page;
+      this.loadingOrders = false;
+      if (this.selectedAdminOrder) {
+        this.selectedAdminOrder = result.items.find(order => order.id === this.selectedAdminOrder.id) || null;
+      }
+    }, error => {
+      if (requestId !== this.ordersRequestId) { return; }
+      this.loadingOrders = false;
+      this.handleAdminDataError(error, 'Could not load orders. Please try again.');
     });
   }
 

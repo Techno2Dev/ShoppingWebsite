@@ -13,9 +13,20 @@ public sealed class OrdersController(StoreDbContext db) : ControllerBase
 {
     [HttpGet]
     [Authorize(Policy = "AdminOnly")]
-    public async Task<ActionResult<IEnumerable<Order>>> GetAll(CancellationToken cancellationToken) =>
-        Ok(await db.Orders.AsNoTracking().Include(order => order.Items)
-            .OrderByDescending(order => order.CreatedAt).ToListAsync(cancellationToken));
+    public async Task<IActionResult> GetAll([FromQuery] int page, CancellationToken cancellationToken)
+    {
+        if (page < 1 || page > 1000000)
+        {
+            return BadRequest(new { message = "Page must be between 1 and 1000000." });
+        }
+
+        const int pageSize = 25;
+        var totalCount = await db.Orders.CountAsync(cancellationToken);
+        var orders = await db.Orders.AsNoTracking().Include(order => order.Items)
+            .OrderByDescending(order => order.CreatedAt).ThenByDescending(order => order.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+        return Ok(new { items = orders, totalCount, page, pageSize });
+    }
 
     [HttpGet("{id:int}")]
     [Authorize(Policy = "AdminOnly")]

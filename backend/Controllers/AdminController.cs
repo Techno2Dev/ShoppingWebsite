@@ -137,12 +137,12 @@ public sealed class AdminController(StoreDbContext db) : ControllerBase
     [HttpGet("summary")]
     public async Task<IActionResult> GetSummary(CancellationToken cancellationToken)
     {
-        var orders = await db.Orders.AsNoTracking().ToListAsync(cancellationToken);
         return Ok(new
         {
-            totalOrders = orders.Count,
-            revenue = orders.Where(order => order.PaymentStatus == "Paid").Sum(order => order.Total),
-            pendingPayments = orders.Count(order => order.PaymentStatus == "Pending"),
+            totalOrders = await db.Orders.CountAsync(cancellationToken),
+            revenue = await db.Orders.Where(order => order.PaymentStatus == "Paid")
+                .SumAsync(order => (decimal?)order.Total, cancellationToken) ?? 0m,
+            pendingPayments = await db.Orders.CountAsync(order => order.PaymentStatus == "Pending", cancellationToken),
             productCount = await db.Products.CountAsync(cancellationToken)
         });
     }
