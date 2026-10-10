@@ -3,6 +3,7 @@ using backend.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
 
 namespace backend.Controllers;
 
@@ -26,7 +27,7 @@ public sealed class OrdersController(StoreDbContext db) : ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult<Order>> Create(CreateOrderRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<CreateOrderResponse>> Create(CreateOrderRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.CustomerName) || string.IsNullOrWhiteSpace(request.Email) ||
             string.IsNullOrWhiteSpace(request.Address) || request.Items.Count == 0 ||
@@ -52,12 +53,14 @@ public sealed class OrdersController(StoreDbContext db) : ControllerBase
         }
 
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var accessToken = OrderPaymentSecurity.CreateAccessToken();
         var order = new Order
         {
             CustomerName = request.CustomerName.Trim(),
             Email = request.Email.Trim(),
             Address = request.Address.Trim(),
             PaymentStatus = "Pending",
+            PaymentAccessTokenHash = OrderPaymentSecurity.HashAccessToken(accessToken),
             Items = requestedItems.Select(item => new OrderItem
             {
                 ProductId = item.ProductId,
@@ -76,6 +79,93 @@ public sealed class OrdersController(StoreDbContext db) : ControllerBase
         db.Orders.Add(order);
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return CreatedAtAction(nameof(GetById), new { id = order.Id }, order);
+
+        var response = new CreateOrderResponse(
+            order.Id,
+            order.Total,
+            order.CreatedAt,
+            order.PaymentStatus,
+            order.Items,
+            accessToken);
+        return Created($"/api/orders/{order.Id}/payment-status", response);
     }
+
+    [AllowAnonymous]
+    [HttpPost("{id:int}/payment-status")]
+    public async Task<ActionResult<CustomerOrderStatusResponse>> GetCustomerPaymentStatus(
+        int id,
+        ReportUpiPaymentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var order = await db.Orders.Include(candidate => candidate.Items)
+            .SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+        if (order is null || !HasValidAccessToken(order, request.AccessToken))
+        {
+            return NotFound();
+        }
+
+        return Ok(ToCustomerStatus(order));
+    }
+
+    [AllowAnonymous]
+    [HttpPost("{id:int}/payment-reported")]
+    public async Task<ActionResult<CustomerOrderStatusResponse>> ReportPayment(
+        int id,
+        ReportUpiPaymentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var order = await db.Orders.Include(candidate => candidate.Items)
+            .SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+        if (order is null || !HasValidAccessToken(order, request.AccessToken))
+        {
+            return NotFound();
+        }
+
+        if (order.PaymentStatus != "Pending")
+        {
+            return Conflict(new { message = "An admin has already changed this order's payment status." });
+        }
+        var transactionReference = request.TransactionReference?.Trim();
+        if (string.IsNullOrWhiteSpace(transactionReference) || transactionReference.Length is < 6 or > 100)
+        {
+            return BadRequest(new { message = "Enter a UPI transaction reference between 6 and 100 characters." });
+        }
+
+        var reportedAt = DateTime.UtcNow;
+        var paymentReference = transactionReference;
+        var updatedRows = await db.Orders
+            .Where(candidate => candidate.Id == id && candidate.PaymentStatus == "Pending")
+            .ExecuteUpdateAsync(update => update
+                .SetProperty(candidate => candidate.PaymentReference, paymentReference)
+                .SetProperty(candidate => candidate.PaymentReportedAt, (DateTime?)reportedAt), cancellationToken);
+        if (updatedRows == 0)
+        {
+            return Conflict(new { message = "An admin has already changed this order's payment status." });
+        }
+
+        await db.Entry(order).ReloadAsync(cancellationToken);
+        return Ok(ToCustomerStatus(order));
+    }
+
+    private static bool HasValidAccessToken(Order order, string accessToken)
+    {
+        if (string.IsNullOrWhiteSpace(order.PaymentAccessTokenHash) || string.IsNullOrWhiteSpace(accessToken))
+        {
+            return false;
+        }
+
+        var suppliedHash = OrderPaymentSecurity.HashAccessToken(accessToken);
+        return CryptographicOperations.FixedTimeEquals(
+            Convert.FromHexString(suppliedHash),
+            Convert.FromHexString(order.PaymentAccessTokenHash));
+    }
+
+    private static CustomerOrderStatusResponse ToCustomerStatus(Order order) => new(
+        order.Id,
+        order.Total,
+        order.CreatedAt,
+        order.PaymentStatus,
+        order.PaymentReference,
+        order.PaymentReportedAt,
+        order.Items);
 }

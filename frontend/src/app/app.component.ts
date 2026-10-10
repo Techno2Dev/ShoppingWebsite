@@ -37,6 +37,12 @@ export class AppComponent implements OnInit {
   private readonly startTimestamp = Date.now();
   orderSuccessId: number | null = null;
   currentOrder: StoreOrder | null = null;
+  paymentAccessToken = '';
+  paymentTransactionReference = '';
+  reportingUpiPayment = false;
+  paymentStatusError = '';
+  paymentReportMessage = '';
+  upiCopyMessage = '';
   upiQrDataUrl = '';
   upiPaymentLink = '';
   qrGenerationError = '';
@@ -63,6 +69,7 @@ export class AppComponent implements OnInit {
 
   ngOnInit(): void {
     this.restoreCart();
+    this.restorePendingPayment();
     this.loadProducts();
   }
 
@@ -172,7 +179,15 @@ export class AppComponent implements OnInit {
     }).subscribe(order => {
       this.orderSuccessId = order.id;
       this.currentOrder = order;
+      this.paymentAccessToken = order.accessToken;
+      this.paymentTransactionReference = '';
+      this.paymentStatusError = '';
+      this.paymentReportMessage = '';
       this.createUpiPaymentQr(order);
+      this.savePendingPayment(order.id, order.accessToken);
+      this.adminOpen = false;
+      this.cartOpen = false;
+      this.accountSettingsOpen = false;
       this.cart = [];
       this.customerName = '';
       this.email = '';
@@ -180,7 +195,6 @@ export class AppComponent implements OnInit {
       this.saveCart();
       this.submittingOrder = false;
       this.loadProducts();
-      if (this.adminOpen) { this.loadAdminData(); }
     }, error => {
       this.submittingOrder = false;
       this.errorMessage = this.messageFrom(error, 'We could not place your order. Please check your details and try again.');
@@ -191,6 +205,9 @@ export class AppComponent implements OnInit {
   toggleAdmin(): void {
     if (this.adminOpen) {
       this.adminOpen = false;
+      if (this.currentOrder && this.paymentAccessToken) {
+        this.resumePayment(this.currentOrder.id, this.paymentAccessToken);
+      }
       return;
     }
 
@@ -219,16 +236,15 @@ export class AppComponent implements OnInit {
   loginAdmin(): void {
     if (this.loggingAdminLogin) { return; }
     this.errorMessage = '';
+      if (this.currentOrder) {
+        this.orderSuccessId = this.currentOrder.id;
+      }
     this.loggingAdminLogin = true;
     this.storeApi.adminLogin(this.adminLoginUserName.trim(), this.adminLoginPassword).subscribe(session => {
       this.adminAuthenticated = true;
       this.adminUserName = session.userName;
       this.adminLoginPassword = '';
       this.loggingAdminLogin = false;
-      this.loadAdminData();
-    }, error => {
-      this.loggingAdminLogin = false;
-      this.errorMessage = this.messageFrom(error, 'Sign-in failed. Check your username and password.');
     });
   }
 
@@ -290,15 +306,106 @@ export class AppComponent implements OnInit {
     this.adminOpen = false;
     this.cartOpen = false;
     this.orderSuccessId = null;
-    this.currentOrder = null;
-    this.upiQrDataUrl = '';
-    this.upiPaymentLink = '';
-    this.qrGenerationError = '';
     this.errorMessage = '';
+  }
+
+  reopenPaymentDetails(): void {
+    if (!this.currentOrder) { return; }
+    this.orderSuccessId = this.currentOrder.id;
+    if (this.paymentAccessToken) {
+      this.refreshCustomerPaymentStatus();
+    }
+  }
+
+  private savePendingPayment(orderId: number, accessToken: string): void {
+    try {
+      sessionStorage.setItem('sapana-current-payment', JSON.stringify({ orderId: orderId, accessToken: accessToken }));
+    } catch (error) { /* Browser storage may be disabled. */ }
+  }
+
+  private clearPendingPayment(): void {
+    try { sessionStorage.removeItem('sapana-current-payment'); } catch (error) { /* Browser storage may be disabled. */ }
+  }
+
+  private restorePendingPayment(): void {
+    try {
+      const saved = sessionStorage.getItem('sapana-current-payment');
+      if (!saved) { return; }
+      const payment = JSON.parse(saved) as { orderId?: number; accessToken?: string };
+      if (typeof payment.orderId === 'number' && typeof payment.accessToken === 'string' && payment.accessToken) {
+        this.resumePayment(payment.orderId, payment.accessToken);
+      }
+    } catch (error) {
+      this.clearPendingPayment();
+    }
+  }
+
+  get paymentCanBeReported(): boolean {
+    return !!this.currentOrder && this.currentOrder.paymentStatus === 'Pending';
+  }
+
+  get paymentHasBeenReported(): boolean {
+    return !!this.currentOrder && this.currentOrder.paymentStatus === 'Pending' &&
+      !!this.currentOrder.paymentReportedAt && !!this.currentOrder.paymentReference;
+  }
+
+  resumePayment(orderId: number, accessToken: string): void {
+    this.paymentStatusError = '';
+    this.storeApi.getCustomerOrderStatus(orderId, accessToken).subscribe(order => {
+      this.currentOrder = order;
+      this.orderSuccessId = order.id;
+      this.paymentAccessToken = accessToken;
+      this.createUpiPaymentQr(order);
+      this.adminOpen = false;
+      this.cartOpen = false;
+      if (['Paid', 'Failed', 'Refunded'].indexOf(order.paymentStatus) >= 0) {
+        this.clearPendingPayment();
+      }
+    }, error => {
+      this.paymentStatusError = this.messageFrom(error, 'This payment link is invalid or no longer available.');
+    });
+  }
+
+  reportUpiPayment(): void {
+    if (!this.currentOrder || !this.paymentAccessToken || !this.paymentCanBeReported || this.reportingUpiPayment) { return; }
+    this.reportingUpiPayment = true;
+    this.paymentStatusError = '';
+    this.paymentReportMessage = '';
+    this.storeApi.reportUpiPayment(
+      this.currentOrder.id,
+      this.paymentAccessToken,
+      this.paymentTransactionReference
+    ).subscribe(order => {
+      this.currentOrder = order;
+      this.paymentTransactionReference = '';
+      this.paymentReportMessage = 'Payment reported. Your order remains unverified until the store checks the bank transaction.';
+      this.reportingUpiPayment = false;
+    }, error => {
+      this.reportingUpiPayment = false;
+      this.paymentStatusError = this.messageFrom(error, 'Could not report the UPI reference. Please try again.');
+    });
+  }
+
+  refreshCustomerPaymentStatus(): void {
+    if (!this.currentOrder || !this.paymentAccessToken) { return; }
+    this.resumePayment(this.currentOrder.id, this.paymentAccessToken);
+  }
+
+  async copyUpiId(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(environment.upiVpa);
+      this.upiCopyMessage = 'UPI ID copied.';
+    } catch (error) {
+      this.upiCopyMessage = 'Copy unavailable. UPI ID: ' + environment.upiVpa;
+    }
   }
 
   get upiConfigured(): boolean {
     return !!environment.upiVpa && !!environment.upiPayeeName;
+  }
+
+  get environmentUpiVpa(): string {
+    return environment.upiVpa;
   }
 
   private createUpiPaymentQr(order: StoreOrder): void {

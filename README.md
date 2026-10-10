@@ -18,7 +18,7 @@ On first start, EF Core creates the PostgreSQL tables and adds sample products i
 
 The admin dashboard requires sign-in. In Development only, the demo account is `admin` / `KitchenKatta@123`. In Production, provision the first administrator by setting `Admin__UserName` and `Admin__Password` in the service environment before first start. The password is stored as a salted PBKDF2 hash. Keep database and admin credentials in environment secrets, not source control.
 
-Prices are in Indian rupees (INR). The Angular app uses the supplied Sapana’s Kitchen Katta logo and keeps the cart in browser local storage. To enable UPI QR checkout, configure `upiVpa` and `upiPayeeName` in the frontend environment files. Payment is still manually verified; this app does not use Razorpay or automatically confirm transfers.
+Prices are in Indian rupees (INR). The Angular app uses the supplied Sapana’s Kitchen Katta logo and keeps the cart in browser local storage. To enable UPI QR checkout, configure `upiVpa` and `upiPayeeName` in the frontend environment files. Each order reserves stock and gives the customer a private, tab-scoped payment-resume token. Customers can reopen the QR after navigation or refresh, copy the UPI ID, and must enter a UPI transaction/UTR reference (6–100 characters) to report payment. Payment status stays **Pending** when a customer reports the UTR; only an admin can change the status. Admins compare the report/reference with the bank statement before marking an order Paid or Failed; the app records the reviewer and review timestamp. Orders have no payment timeout and keep their reserved stock until an admin changes the status. There is no automatic UPI verification or payment gateway integration.
 
 ## Admin sign-in
 

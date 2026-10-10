@@ -11,7 +11,7 @@
     </a>
     <div class="header-actions">
       <button class="admin-link" type="button" (click)="toggleAdmin()">{{ adminOpen ? 'Back to shop' : 'Admin' }}</button>
-      <button class="bag-button" [class.bag-pulse]="bagPulse" type="button" (click)="cartOpen = true" [attr.aria-label]="'Open shopping bag, ' + cartCount + ' items'">
+      <button class="bag-button" *ngIf="!adminOpen" [class.bag-pulse]="bagPulse" type="button" (click)="cartOpen = true" [attr.aria-label]="'Open shopping bag, ' + cartCount + ' items'">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l1 13H4L5 8Z"></path><path d="M9 9V6a3 3 0 0 1 6 0v3"></path></svg>
         <span>Bag</span><span class="bag-count">{{ cartCount }}</span>
       </button>
@@ -35,6 +35,10 @@
         </article>
       </div>
     </section>
+    <div class="resume-payment-banner" *ngIf="currentOrder && orderSuccessId === null" role="status">
+      <div><strong>Order #{{ currentOrder.id }}</strong><span>Payment status: {{ currentOrder.paymentStatus }}</span></div>
+      <button type="button" (click)="reopenPaymentDetails()">{{ currentOrder.paymentReportedAt ? 'Check payment status' : 'Resume payment' }}</button>
+    </div>
   </main>
 
   <main class="admin-login-page" *ngIf="adminOpen && !adminAuthenticated">
@@ -54,10 +58,10 @@
     <div class="admin-heading"><div><span class="eyebrow">SAPANA’S KITCHEN KATTA</span><h1>Store <em>dashboard.</em></h1><p>Signed in as {{ adminUserName }}. Manage products and customer orders.</p></div><div class="admin-heading-actions"><button class="refresh-button" (click)="loadAdminData()">↻ &nbsp;Refresh</button><button class="account-button" type="button" (click)="openAccountSettings()">{{ accountSettingsOpen ? 'Close settings' : 'Change login' }}</button><button class="logout-button" (click)="logoutAdmin()">Sign out</button></div></div>
     <div class="error-banner" *ngIf="errorMessage" role="alert">{{ errorMessage }} <button (click)="errorMessage = ''" aria-label="Dismiss">×</button></div>
     <div class="notice" *ngIf="notice && !errorMessage" role="status">{{ notice }} <button (click)="notice = ''" aria-label="Dismiss">×</button></div>
-    <div class="admin-stats" *ngIf="!loadingAdmin"><article><span>ALL ORDERS</span><strong>{{ summary.totalOrders }}</strong><small>All customer orders</small></article><article><span>PAID REVENUE</span><strong>{{ summary.revenue | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong><small>From confirmed payments</small></article><article><span>AWAITING PAYMENT</span><strong>{{ summary.pendingPayments }}</strong><small>Needs manual review</small></article><article><span>PRODUCTS</span><strong>{{ summary.productCount }}</strong><small>Available in your collection</small></article></div>
+    <div class="admin-stats" *ngIf="!loadingAdmin"><article><span>ALL ORDERS</span><strong>{{ summary.totalOrders }}</strong><small>All customer orders</small></article><article><span>PAID REVENUE</span><strong>{{ summary.revenue | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong><small>From confirmed payments</small></article><article><span>AWAITING PAYMENT</span><strong>{{ summary.pendingPayments }}</strong><small>Pending admin action</small></article><article><span>PRODUCTS</span><strong>{{ summary.productCount }}</strong><small>Available in your collection</small></article></div>
     <div class="loading-state" *ngIf="loadingAdmin"><span class="spinner"></span> Gathering your numbers…</div>
     <section class="orders-panel"><div class="orders-heading"><div><span class="eyebrow">THE LATEST</span><h2>Recent orders</h2><p class="manual-admin-note">Check UPI receipts against your bank before manually marking an order Paid.</p></div><span>{{ orders.length }} total</span></div>
-      <div class="orders-table-wrap"><table><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>ITEMS</th><th>DATE</th><th>TOTAL</th><th>PAYMENT</th></tr></thead><tbody><tr *ngFor="let order of orders; trackBy: trackOrder"><td class="order-id">#{{ order.id }}</td><td><strong>{{ order.customerName }}</strong><small>{{ order.email }}</small></td><td>{{ order.items.length }} items</td><td>{{ order.createdAt | date:'mediumDate' }}</td><td>{{ order.total | currency:'INR':'symbol':'1.2-2':'en-IN' }}</td><td><select [ngModel]="order.paymentStatus" (ngModelChange)="setPaymentStatus(order, $event)" [class]="'status-select status-' + order.paymentStatus.toLowerCase()"><option>Pending</option><option>Paid</option><option>Failed</option><option>Refunded</option></select></td></tr><tr *ngIf="!orders.length && !loadingAdmin"><td colspan="6" class="no-orders">No orders yet.</td></tr></tbody></table></div>
+      <div class="orders-table-wrap"><table><thead><tr><th>ORDER</th><th>CUSTOMER / PAYMENT NOTE</th><th>ITEMS</th><th>DATE</th><th>TOTAL</th><th>PAYMENT</th></tr></thead><tbody><tr *ngFor="let order of orders; trackBy: trackOrder"><td class="order-id">#{{ order.id }}</td><td><strong>{{ order.customerName }}</strong><small>{{ order.email }}</small><small *ngIf="order.paymentReportedAt">UPI payment reported · {{ order.paymentReportedAt | date:'short' }}</small><small *ngIf="order.paymentReference">UTR: {{ order.paymentReference }}</small><small *ngIf="order.paymentVerifiedAt">Reviewed by {{ order.paymentVerifiedBy || 'admin' }} · {{ order.paymentVerifiedAt | date:'short' }}</small></td><td>{{ order.items.length }} items</td><td>{{ order.createdAt | date:'mediumDate' }}</td><td>{{ order.total | currency:'INR':'symbol':'1.2-2':'en-IN' }}</td><td><select [ngModel]="order.paymentStatus" (ngModelChange)="setPaymentStatus(order, $event)" [disabled]="order.paymentStatus === 'Failed' || order.paymentStatus === 'Refunded' || order.paymentStatus === 'Expired'" [class]="'status-select status-' + order.paymentStatus.toLowerCase()"><option value="Pending">Pending</option><option value="Paid" [disabled]="order.paymentStatus !== 'Pending' || !order.paymentReference || !order.paymentReportedAt">Paid</option><option value="Failed" [disabled]="order.paymentStatus !== 'Pending'">Failed</option><option value="Refunded" [disabled]="order.paymentStatus !== 'Paid'">Refunded</option><option *ngIf="order.paymentStatus === 'Expired'" value="Expired" disabled>Expired</option></select></td></tr><tr *ngIf="!orders.length && !loadingAdmin"><td colspan="6" class="no-orders">No orders yet.</td></tr></tbody></table></div>
       <div class="orders-note"><small>Check UPI payment against the bank/UPI receipt before manually marking an order Paid.</small></div>
     </section>
 
@@ -112,23 +116,43 @@
     <form class="checkout-form" *ngIf="cart.length" (ngSubmit)="placeOrder()"><div class="checkout-total"><span>Subtotal</span><strong>{{ cartTotal | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong></div><p class="checkout-note">Shipping and any applicable taxes are calculated at checkout.</p><label>Your name<input name="customerName" [(ngModel)]="customerName" autocomplete="name" required maxlength="120" placeholder="Alex Morgan"></label><label>Email address<input name="email" type="email" [(ngModel)]="email" autocomplete="email" required maxlength="254" placeholder="you@example.com"></label><label>Shipping address<textarea name="address" [(ngModel)]="address" autocomplete="street-address" required maxlength="500" rows="3" placeholder="Street, city, postal code"></textarea></label><button class="checkout-button" type="submit" [disabled]="submittingOrder">{{ submittingOrder ? 'Placing your order…' : 'Place order · ' + (cartTotal | currency:'INR':'symbol':'1.2-2':'en-IN') }} <span>↗</span></button><small class="secure-note">A simple guest checkout. No account needed.</small></form>
   </aside>
 
-  <div class="success-overlay" *ngIf="orderSuccessId !== null">
+  <div class="success-overlay" *ngIf="orderSuccessId !== null && !adminOpen">
     <section class="success-card">
       <span class="success-icon">✳</span>
       <span class="eyebrow">ORDER RECEIVED</span>
       <h2>Thank you.<br><em>Order received.</em></h2>
       <p>Your order <strong>#{{ orderSuccessId }}</strong> is saved for <strong>{{ currentOrder?.total | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong>.</p>
-      <section class="upi-payment" *ngIf="upiConfigured">
+      <div class="payment-state payment-pending" *ngIf="currentOrder?.paymentStatus === 'Pending'">
+        <strong>Payment status: Pending admin verification</strong>
+        <span>This order stays Pending until an admin verifies your UPI payment and updates its status.</span>
+      </div>
+      <section class="upi-payment" *ngIf="upiConfigured && currentOrder && currentOrder.paymentStatus === 'Pending'">
         <h3>Pay securely with UPI</h3>
         <img *ngIf="upiQrDataUrl" class="upi-qr" [src]="upiQrDataUrl" alt="UPI payment QR code for this order">
         <span class="qr-loading" *ngIf="!upiQrDataUrl && !qrGenerationError">Preparing your payment QR…</span>
         <a class="upi-app-link" [href]="upiPaymentLink">Open in a UPI app <span>↗</span></a>
+        <div class="upi-id-row"><span>UPI ID: <strong>{{ environmentUpiVpa }}</strong></span><button type="button" (click)="copyUpiId()">Copy UPI ID</button></div>
+        <span class="upi-copy-message" *ngIf="upiCopyMessage" role="status">{{ upiCopyMessage }}</span>
         <p class="upi-instructions">Scan the QR with any UPI app. The amount and order reference are included.</p>
+        <form class="payment-report-form" *ngIf="paymentCanBeReported && !paymentHasBeenReported" (ngSubmit)="reportUpiPayment()">
+          <label>UPI transaction/reference ID <span>(required)</span><input name="paymentTransactionReference" [(ngModel)]="paymentTransactionReference" required minlength="6" maxlength="100" autocomplete="off" placeholder="Enter the UTR/reference from your UPI app"></label>
+          <button class="checkout-button" type="submit" [disabled]="reportingUpiPayment || paymentTransactionReference.trim().length < 6">{{ reportingUpiPayment ? 'Submitting…' : 'I’ve completed the UPI payment' }}</button>
+        </form>
+        <div class="payment-state payment-reported" *ngIf="paymentHasBeenReported">
+          <strong>UPI details submitted — order remains Pending</strong>
+          <span *ngIf="currentOrder.paymentReference">Reference: {{ currentOrder.paymentReference }}</span>
+          <span>Your order will remain Pending until an admin checks the bank transaction and updates it.</span>
+          <button type="button" class="refresh-payment-button" (click)="refreshCustomerPaymentStatus()">Check for an admin update</button>
+        </div>
       </section>
       <p class="upi-setup-note" *ngIf="!upiConfigured">UPI payment is not configured yet. Set the store UPI ID in the frontend environment settings. This order is saved as Pending.</p>
       <p class="qr-error" *ngIf="qrGenerationError">{{ qrGenerationError }} <a [href]="upiPaymentLink">Open the UPI app instead</a>.</p>
-      <div class="manual-verification"><strong>Payment is verified manually</strong><span>Your order stays Pending until the store admin confirms the incoming payment and updates its status.</span></div>
-      <button class="checkout-button" (click)="showShop()">Continue shopping <span>↗</span></button>
+      <div class="payment-state payment-paid" *ngIf="currentOrder?.paymentStatus === 'Paid'"><strong>Payment verified</strong><span>The store confirmed your payment. Thank you.</span></div>
+      <div class="payment-state payment-failed" *ngIf="currentOrder?.paymentStatus === 'Failed' || currentOrder?.paymentStatus === 'Refunded'"><strong>Payment status: {{ currentOrder.paymentStatus }}</strong><span>Contact the store if you believe this status is incorrect.</span></div>
+      <div class="manual-verification"><strong>Payment verification is manual</strong><span>QR payment is not verified automatically. An admin must verify receipt against the bank statement before marking the order Paid. Never mark it Paid from the customer-submitted reference alone.</span></div>
+      <div class="payment-error" *ngIf="paymentStatusError" role="alert">{{ paymentStatusError }} <button type="button" (click)="paymentStatusError = ''">×</button></div>
+      <div class="payment-report-success" *ngIf="paymentReportMessage" role="status">{{ paymentReportMessage }}</div>
+      <button class="checkout-button" (click)="showShop()">{{ paymentCanBeReported || currentOrder?.paymentReportedAt ? 'Continue shopping — payment details are saved' : 'Continue shopping' }} <span>↗</span></button>
     </section>
   </div>
   <footer class="site-footer" *ngIf="!adminOpen">

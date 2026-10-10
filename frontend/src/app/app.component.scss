@@ -1435,3 +1435,229 @@ td small {
 .checkout-form .checkout-button{width:100%;margin-top:12px}
 .secure-note{display:block;margin-top:9px;color:#8b745f;font-size:10px;text-align:center}
 @media(max-width:600px){.cart-drawer{padding:20px 18px}.cart-line{grid-template-columns:54px minmax(0,1fr) auto;gap:10px}.cart-emoji{width:54px;height:54px}}
+
+.success-overlay {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: 20px;
+  background: rgba(50, 28, 17, .68);
+  backdrop-filter: blur(3px);
+}
+
+.success-card {
+  box-sizing: border-box;
+  width: min(100%, 480px);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  margin: auto;
+  padding: 28px;
+  border: 1px solid #f1d3ae;
+  border-radius: 16px;
+  background: #fffdf8;
+  box-shadow: 0 24px 80px rgba(45, 24, 12, .32);
+  text-align: center;
+}
+
+.success-icon {
+  display: block;
+  margin-bottom: 10px;
+  color: #c64a27;
+  font-size: 28px;
+}
+
+.success-card h2 {
+  margin: 12px 0;
+  color: #4c2e1c;
+  font: 700 28px/1.2 'DM Sans', Arial, sans-serif;
+}
+
+.success-card > p {
+  color: #765b45;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.upi-payment {
+  margin: 18px 0 12px;
+  padding: 16px;
+  border: 1px solid #efd9bf;
+  border-radius: 10px;
+  background: #fff7e7;
+}
+
+.upi-payment h3 {
+  margin: 0;
+  color: #63301d;
+  font-size: 16px;
+}
+
+.upi-qr {
+  display: block;
+  width: 240px;
+  height: 240px;
+  max-width: 100%;
+  object-fit: contain;
+  margin: 14px auto;
+  padding: 8px;
+  border: 1px solid #ecd8c2;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.qr-loading {
+  display: block;
+  padding: 28px;
+  color: #795a41;
+  font-size: 12px;
+}
+
+.upi-app-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px auto;
+  color: #a92e20;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.upi-instructions {
+  margin: 8px 0 0;
+  color: #765b45;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.upi-setup-note,
+.qr-error {
+  padding: 12px;
+  border-radius: 6px;
+  background: #fff0d8;
+  color: #795a41;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.qr-error a {
+  color: #a92e20;
+}
+
+.manual-verification {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 14px 0;
+  padding: 12px;
+  border-left: 3px solid #d04a28;
+  border-radius: 0 6px 6px 0;
+  background: #fff1dc;
+  text-align: left;
+}
+
+.manual-verification strong {
+  color: #8d351f;
+  font-size: 12px;
+}
+
+.manual-verification span {
+  color: #6f6255;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.success-card > .checkout-button {
+  width: 100%;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.payment-state{
+  display:flex;flex-direction:column;gap:5px;margin:12px 0;padding:12px 14px;border:1px solid #e7d7bd;border-left:4px solid #d38a28;border-radius:6px;background:#fff8e9;text-align:left
+}
+.payment-state strong{
+  color:#744018;font-size:12px
+}
+.payment-state span{
+  color:#715e49;font-size:11px;line-height:1.5
+}
+.payment-reported{
+  border-color:#e8c47c;border-left-color:#d18a21;background:#fff5dc
+}
+.payment-paid{
+  border-color:#b8d4ac;border-left-color:#43833a;background:#f1f8ed
+}
+.payment-paid strong{
+  color:#366b2c
+}
+.payment-expired,.payment-failed{
+  border-color:#e8c2b9;border-left-color:#b83a2a;background:#fff0ec
+}
+.payment-expired strong,.payment-failed strong{
+  color:#912c20
+}
+.payment-report-form{
+  margin-top:14px;text-align:left
+}
+.payment-report-form label{
+  display:block;color:#684a36;font-size:11px
+}
+.payment-report-form label span{
+  color:#8b745f;font-weight:400
+}
+.payment-report-form input{
+  display:block;box-sizing:border-box;width:100%;min-height:42px;margin-top:6px;padding:10px 11px;border:1px solid #e6cdb0;border-radius:6px;background:#fff;color:#3d291c;font:12px 'DM Sans',Arial,sans-serif
+}
+.payment-report-form .checkout-button{
+  width:100%;justify-content:center;margin-top:10px
+}
+.upi-id-row{
+  display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px;margin:9px 0 3px;color:#684a36;font-size:11px
+}
+.upi-id-row button,.refresh-payment-button{
+  padding:6px 10px;border:1px solid #e2c7a8;border-radius:5px;background:#fffaf3;color:#8e3a24;font:600 10px 'DM Sans',Arial,sans-serif;cursor:pointer
+}
+.upi-id-row button:hover,.refresh-payment-button:hover{
+  background:#ffe8c8
+}
+.upi-copy-message{
+  display:block;margin:4px 0;color:#47743b;font-size:10px
+}
+.refresh-payment-button{
+  align-self:flex-start;margin-top:6px
+}
+.payment-error,.payment-report-success{
+  display:flex;justify-content:space-between;gap:10px;margin:10px 0;padding:10px 12px;border-radius:6px;background:#fff0ec;color:#922f22;font-size:11px;line-height:1.5
+}
+.payment-report-success{
+  display:block;background:#eff7e9;color:#426b37
+}
+.payment-error button{
+  border:0;background:transparent;color:inherit;font-size:16px;cursor:pointer
+}
+.orders-table-wrap td small{
+  white-space:normal;min-width:120px
+}
+.status-paymentreported{
+  background:#fff0d1;color:#81530d
+}
+.status-expired{
+  background:#f7e4e0;color:#8f3529
+}
+@media(max-width:600px){
+  .upi-payment{
+    padding:12px
+  }
+  .payment-state{
+    padding:10px
+  }
+  .upi-id-row{
+    font-size:10px
+  }
+  .payment-report-form .checkout-button{
+    padding:12px;font-size:11px
+  }
+}

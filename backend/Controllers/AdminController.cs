@@ -95,14 +95,84 @@ public sealed class AdminController(StoreDbContext db) : ControllerBase
             return BadRequest(new { message = "Payment status must be Pending, Paid, Failed, or Refunded." });
         }
 
-        var order = await db.Orders.FindAsync(new object[] { id }, cancellationToken);
+        var order = await db.Orders.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
         if (order is null)
         {
             return NotFound();
         }
 
-        order.PaymentStatus = allowed.First(status => status.Equals(request.PaymentStatus, StringComparison.OrdinalIgnoreCase));
+        var nextStatus = allowed.First(status => status.Equals(request.PaymentStatus, StringComparison.OrdinalIgnoreCase));
+        if (order.PaymentStatus is "Failed" or "Refunded" or "Expired" ||
+            (order.PaymentStatus == "Paid" && nextStatus != "Refunded"))
+        {
+            return Conflict(new { message = "This order is already in a terminal payment state and cannot be changed here." });
+        }
+        if (nextStatus == "Refunded" && order.PaymentStatus != "Paid")
+        {
+            return BadRequest(new { message = "Only an order previously verified as Paid can be marked Refunded." });
+        }
+        if (nextStatus == "Paid" && (order.PaymentStatus != "Pending" ||
+            string.IsNullOrWhiteSpace(order.PaymentReference) || order.PaymentReportedAt is null))
+        {
+            return BadRequest(new { message = "This order needs a customer UTR/reference report before it can be verified as Paid." });
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var now = DateTime.UtcNow;
+        var reviewedReportedPayment = order.PaymentStatus == "Pending" && order.PaymentReportedAt is not null &&
+            (nextStatus == "Paid" || nextStatus == "Failed");
+        int updatedRows;
+        if (nextStatus == "Pending")
+        {
+            updatedRows = await db.Orders.Where(candidate => candidate.Id == id && candidate.PaymentStatus == order.PaymentStatus)
+                .ExecuteUpdateAsync(update => update
+                    .SetProperty(candidate => candidate.PaymentStatus, "Pending")
+                    .SetProperty(candidate => candidate.PaymentReportedAt, (DateTime?)null)
+                    .SetProperty(candidate => candidate.PaymentReference, (string?)null)
+                    .SetProperty(candidate => candidate.PaymentVerifiedAt, (DateTime?)null)
+                    .SetProperty(candidate => candidate.PaymentVerifiedBy, (string?)null), cancellationToken);
+        }
+        else if (reviewedReportedPayment)
+        {
+            updatedRows = await db.Orders.Where(candidate => candidate.Id == id && candidate.PaymentStatus == "Pending" && candidate.PaymentReportedAt != null)
+                .ExecuteUpdateAsync(update => update
+                    .SetProperty(candidate => candidate.PaymentStatus, nextStatus)
+                    .SetProperty(candidate => candidate.PaymentVerifiedAt, (DateTime?)now)
+                    .SetProperty(candidate => candidate.PaymentVerifiedBy, User.Identity!.Name), cancellationToken);
+        }
+        else
+        {
+            updatedRows = await db.Orders.Where(candidate => candidate.Id == id && candidate.PaymentStatus == order.PaymentStatus)
+                .ExecuteUpdateAsync(update => update.SetProperty(candidate => candidate.PaymentStatus, nextStatus), cancellationToken);
+        }
+
+        if (updatedRows == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return Conflict(new { message = "The order payment status changed. Refresh the order and try again." });
+        }
+
+        if (nextStatus == "Failed" && order.PaymentStatus == "Pending")
+        {
+            var items = await db.OrderItems.AsNoTracking()
+                .Where(item => item.OrderId == id)
+                .ToListAsync(cancellationToken);
+            var productIds = items.Select(item => item.ProductId).Distinct().ToArray();
+            var products = await db.Products.Where(product => productIds.Contains(product.Id))
+                .ToDictionaryAsync(product => product.Id, cancellationToken);
+            foreach (var item in items)
+            {
+                if (products.TryGetValue(item.ProductId, out var product))
+                {
+                    product.Stock += item.Quantity;
+                }
+            }
+        }
+
         await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        order = await db.Orders.AsNoTracking().Include(candidate => candidate.Items)
+            .SingleAsync(candidate => candidate.Id == id, cancellationToken);
         return Ok(order);
     }
 }

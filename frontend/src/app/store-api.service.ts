@@ -36,8 +36,14 @@ export interface StoreOrder {
   address: string;
   paymentStatus: string;
   createdAt: string;
+  paymentReference?: string | null;
+  paymentReportedAt?: string | null;
   total: number;
   items: OrderItem[];
+}
+
+export interface CreatedStoreOrder extends StoreOrder {
+  accessToken: string;
 }
 
 export interface AdminSummary {
@@ -122,8 +128,21 @@ export class StoreApiService {
     email: string;
     address: string;
     items: { productId: number; quantity: number }[];
-  }): Observable<StoreOrder> {
-    return this.http.post<StoreOrder>(this.apiUrl + '/orders', order);
+  }): Observable<CreatedStoreOrder> {
+    return this.http.post<CreatedStoreOrder>(this.apiUrl + '/orders', order);
+  }
+
+  getCustomerOrderStatus(orderId: number, accessToken: string): Observable<StoreOrder> {
+    return this.http.post<StoreOrder>(this.apiUrl + '/orders/' + orderId + '/payment-status', {
+      accessToken: accessToken
+    });
+  }
+
+  reportUpiPayment(orderId: number, accessToken: string, transactionReference: string): Observable<StoreOrder> {
+    return this.http.post<StoreOrder>(this.apiUrl + '/orders/' + orderId + '/payment-reported', {
+      accessToken: accessToken,
+      transactionReference: transactionReference.trim() || null
+    });
   }
 
   updatePaymentStatus(orderId: number, paymentStatus: string): Observable<StoreOrder> {

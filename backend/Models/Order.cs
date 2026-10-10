@@ -9,5 +9,11 @@ public sealed class Order
     public string PaymentStatus { get; set; } = "Pending";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public decimal Total { get; set; }
+    public string? PaymentReference { get; set; }
+    public DateTime? PaymentReportedAt { get; set; }
+    public DateTime? PaymentVerifiedAt { get; set; }
+    public string? PaymentVerifiedBy { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? PaymentAccessTokenHash { get; set; }
     public List<OrderItem> Items { get; set; } = [];
 }

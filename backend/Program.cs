@@ -62,6 +62,12 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<StoreDbContext>();
     db.Database.EnsureCreated();
+    db.Database.ExecuteSqlRaw("ALTER TABLE \"Orders\" ADD COLUMN IF NOT EXISTS \"PaymentReference\" character varying(100) NULL;");
+    db.Database.ExecuteSqlRaw("ALTER TABLE \"Orders\" ADD COLUMN IF NOT EXISTS \"PaymentReportedAt\" timestamp with time zone NULL;");
+    db.Database.ExecuteSqlRaw("ALTER TABLE \"Orders\" ADD COLUMN IF NOT EXISTS \"PaymentVerifiedAt\" timestamp with time zone NULL;");
+    db.Database.ExecuteSqlRaw("ALTER TABLE \"Orders\" ADD COLUMN IF NOT EXISTS \"PaymentVerifiedBy\" character varying(100) NULL;");
+    db.Database.ExecuteSqlRaw("ALTER TABLE \"Orders\" ADD COLUMN IF NOT EXISTS \"PaymentAccessTokenHash\" text NULL;");
+    db.Database.ExecuteSqlRaw("UPDATE \"Orders\" SET \"PaymentStatus\" = 'Pending' WHERE \"PaymentStatus\" = 'PaymentReported';");
 
     var configuredAdminUserName = builder.Configuration["Admin:UserName"];
     var configuredAdminPassword = builder.Configuration["Admin:Password"];
