@@ -29,6 +29,7 @@ public sealed class ProductsController(StoreDbContext db) : ControllerBase
     [HttpGet("{id:int}/image")]
     public async Task<IActionResult> GetImage(int id, CancellationToken cancellationToken)
     {
+        Response.Headers.CacheControl = "no-store";
         var image = await db.Products.AsNoTracking()
             .Where(product => product.Id == id)
             .Select(product => new { product.ImageData, product.ImageContentType })

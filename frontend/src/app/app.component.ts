@@ -51,6 +51,12 @@ export class AppComponent implements OnInit {
   selectedAdminOrder: StoreOrder | null = null;
   adminProducts: Product[] = [];
   savingProduct = false;
+  editingProduct: Product | null = null;
+  editProductDraft: Omit<Product, 'id' | 'imageUrl'> | null = null;
+  editProductImageFile: File | null = null;
+  editProductImagePreview = '';
+  savingProductEdit = false;
+  editProductError = '';
   deletingProductId: number | null = null;
   selectedProductImage: File | null = null;
   productImagePreviewUrl = '';
@@ -208,6 +214,7 @@ export class AppComponent implements OnInit {
     if (this.adminOpen) {
       this.adminOpen = false;
       this.selectedAdminOrder = null;
+      this.closeEditProduct();
       if (this.currentOrder && this.paymentAccessToken) {
         this.resumePayment(this.currentOrder.id, this.paymentAccessToken);
       }
@@ -265,6 +272,7 @@ export class AppComponent implements OnInit {
     this.storeApi.adminLogout().subscribe(() => {
       this.adminAuthenticated = false;
       this.selectedAdminOrder = null;
+      this.closeEditProduct();
       this.adminUserName = '';
       this.adminLoginPassword = '';
       this.adminOpen = false;
@@ -276,11 +284,13 @@ export class AppComponent implements OnInit {
   }
 
   openAccountSettings(): void {
+    if (this.savingProductEdit) { return; }
     if (this.accountSettingsOpen) {
       this.closeAccountSettings();
       return;
     }
     this.selectedAdminOrder = null;
+    this.closeEditProduct();
     this.currentAdminPassword = '';
     this.newAdminUserName = this.adminUserName;
     this.newAdminPassword = '';
@@ -490,6 +500,7 @@ export class AppComponent implements OnInit {
     if (error.status === 401) {
       this.adminAuthenticated = false;
       this.selectedAdminOrder = null;
+      this.closeEditProduct();
       this.adminUserName = '';
       this.storeApi.clearAdminToken();
       this.orders = [];
@@ -556,6 +567,98 @@ export class AppComponent implements OnInit {
   clearProductImage(): void {
     this.productImagePreviewUrl = '';
     this.selectedProductImage = null;
+  }
+
+  openEditProduct(product: Product): void {
+    this.editingProduct = product;
+    this.editProductDraft = {
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      stock: product.stock,
+      category: product.category,
+      image: product.image
+    };
+    this.editProductImageFile = null;
+    this.editProductImagePreview = product.imageUrl || '';
+    this.editProductError = '';
+  }
+
+  closeEditProduct(): void {
+    if (this.savingProductEdit) { return; }
+    this.editingProduct = null;
+    this.editProductDraft = null;
+    this.editProductImageFile = null;
+    this.editProductImagePreview = '';
+    this.editProductError = '';
+  }
+
+  onEditProductImageSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files && input.files.length ? input.files[0] : null;
+    this.editProductError = '';
+    if (!file || !this.editProductDraft) { return; }
+    if (['image/jpeg', 'image/png', 'image/gif', 'image/webp'].indexOf(file.type) < 0 || file.size > 5 * 1024 * 1024 || file.size === 0) {
+      this.editProductError = 'Choose a JPG, PNG, GIF, or WebP image smaller than 5 MB.';
+      input.value = '';
+      return;
+    }
+    this.editProductImageFile = file;
+    this.editProductDraft.image = '';
+    this.editProductImagePreview = '';
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (this.editProductImageFile === file && typeof reader.result === 'string') {
+        this.editProductImagePreview = reader.result;
+      }
+    };
+    reader.onerror = () => {
+      if (this.editProductImageFile === file) {
+        this.editProductError = 'Could not preview this image. Please choose another file.';
+        this.clearEditProductImage();
+        input.value = '';
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  clearEditProductImage(): void {
+    this.editProductImageFile = null;
+    this.editProductImagePreview = this.editingProduct && this.editingProduct.imageUrl || '';
+    if (this.editProductDraft && this.editingProduct) {
+      this.editProductDraft.image = this.editingProduct.image;
+    }
+  }
+
+  saveProductEdit(): void {
+    if (!this.editingProduct || !this.editProductDraft || this.savingProductEdit) { return; }
+    const id = this.editingProduct.id;
+    const draft = this.editProductDraft;
+    this.editProductError = '';
+    this.savingProductEdit = true;
+    this.storeApi.updateProduct(id, {
+      name: draft.name.trim(),
+      description: draft.description.trim(),
+      price: Number(draft.price),
+      stock: Number(draft.stock),
+      category: draft.category.trim(),
+      image: this.editProductImageFile ? '' : draft.image.trim()
+    }, this.editProductImageFile || undefined).subscribe(updated => {
+      this.savingProductEdit = false;
+      this.adminProducts = this.adminProducts.map(product => product.id === id ? updated : product);
+      this.cart = this.cart.map(line => line.product.id === id ? { ...line, product: updated } : line);
+      this.saveCart();
+      this.closeEditProduct();
+      this.notice = updated.name + ' updated.';
+      this.loadProducts();
+    }, error => {
+      this.savingProductEdit = false;
+      if (error.status === 401) {
+        this.handleAdminDataError(error, 'Could not update the product.');
+      } else {
+        this.editProductError = this.messageFrom(error, 'Could not update the product. Please check the details and try again.');
+      }
+    });
   }
 
   deleteProduct(product: Product): void {

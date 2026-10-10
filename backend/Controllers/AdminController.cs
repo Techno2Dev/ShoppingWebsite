@@ -49,6 +49,67 @@ public sealed class AdminController(StoreDbContext db) : ControllerBase
         return Created("/api/products", product);
     }
 
+    [HttpPut("products/{id:int}")]
+    [RequestSizeLimit(5_300_000)]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UpdateProduct(int id, [FromForm] CreateProductRequest request, CancellationToken cancellationToken)
+    {
+        var product = await db.Products.FindAsync(new object[] { id }, cancellationToken);
+        if (product is null)
+        {
+            return NotFound(new { message = "Product not found." });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Length > 120 ||
+            string.IsNullOrWhiteSpace(request.Description) || request.Description.Length > 1000 ||
+            string.IsNullOrWhiteSpace(request.Category) || request.Category.Length > 60 ||
+            request.Price <= 0 || request.Price > 99999999.99m ||
+            request.Stock < 0 || request.Stock > 1000000 ||
+            request.Image is { Length: > 200 } ||
+            (request.ImageFile is null && string.IsNullOrWhiteSpace(request.Image) && product.ImageData is null))
+        {
+            return BadRequest(new { message = "Enter valid product details, a positive price, stock, and an image or emoji." });
+        }
+
+        if (request.ImageFile is { } file &&
+            (file.Length == 0 || file.Length > 5 * 1024 * 1024 || !IsSupportedImage(file.ContentType)))
+        {
+            return BadRequest(new { message = "Choose a JPG, PNG, GIF, or WebP image smaller than 5 MB." });
+        }
+
+        product.Name = request.Name.Trim();
+        product.Description = request.Description.Trim();
+        product.Price = decimal.Round(request.Price, 2);
+        product.Category = request.Category.Trim();
+        product.Stock = request.Stock;
+
+        if (request.ImageFile is { } replacement)
+        {
+            product.Image = "";
+            product.ImageData = await ReadImageAsync(replacement, cancellationToken);
+            product.ImageContentType = replacement.ContentType;
+        }
+        else if (!string.IsNullOrWhiteSpace(request.Image))
+        {
+            product.Image = request.Image.Trim();
+            product.ImageData = null;
+            product.ImageContentType = null;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        return Ok(new
+        {
+            product.Id,
+            product.Name,
+            product.Description,
+            product.Price,
+            product.Image,
+            imageUrl = product.ImageData is null ? null : $"{Request.Scheme}://{Request.Host}/api/products/{product.Id}/image?v={DateTime.UtcNow.Ticks}",
+            product.Category,
+            product.Stock
+        });
+    }
+
     private static bool IsSupportedImage(string contentType) => contentType is
         "image/jpeg" or "image/png" or "image/gif" or "image/webp";
 

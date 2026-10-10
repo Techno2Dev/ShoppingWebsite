@@ -108,6 +108,21 @@ export class StoreApiService {
     return this.http.post<Product>(this.apiUrl + '/admin/products', formData, { headers: this.adminHeaders() });
   }
 
+  updateProduct(productId: number, product: Omit<Product, 'id' | 'imageUrl'>, imageFile?: File): Observable<Product> {
+    const formData = new FormData();
+    formData.append('name', product.name);
+    formData.append('description', product.description);
+    formData.append('price', String(product.price));
+    formData.append('image', product.image);
+    formData.append('category', product.category);
+    formData.append('stock', String(product.stock));
+    if (imageFile) {
+      formData.append('imageFile', imageFile, imageFile.name);
+    }
+    return this.http.put<Product>(this.apiUrl + '/admin/products/' + productId, formData,
+      { headers: this.adminHeaders() });
+  }
+
   deleteProduct(productId: number): Observable<void> {
     return this.http.delete<void>(this.apiUrl + '/admin/products/' + productId, { headers: this.adminHeaders() });
   }

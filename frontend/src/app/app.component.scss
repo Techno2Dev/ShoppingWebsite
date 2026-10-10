@@ -1210,6 +1210,30 @@ td small {
   white-space: nowrap;
 }
 
+.catalog-product-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.edit-product-button {
+  padding: 7px 10px;
+  border: 1px solid #e7cba7;
+  background: #fff9ef;
+  color: #8c4c24;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.edit-product-button:hover:not(:disabled) {
+  background: #f9e9d2;
+}
+
+.edit-product-button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
 .delete-product-button {
   padding: 7px 10px;
   border: 1px solid #efd0c7;
@@ -1385,6 +1409,101 @@ td small {
   min-height: 46px;
   margin-top: 5px;
   border-radius: 7px;
+}
+
+.edit-product-modal {
+  width: min(100%, 540px);
+}
+
+.edit-product-form textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 76px;
+  margin-top: 7px;
+  padding: 11px 12px;
+  border: 1px solid #e6cdb0;
+  border-radius: 7px;
+  background: #fff;
+  color: #3d291c;
+  font: 14px 'DM Sans', Arial, sans-serif;
+  resize: vertical;
+}
+
+.edit-product-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.edit-product-image {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid #efd9bf;
+  border-radius: 7px;
+  background: #fff9f0;
+  color: #684a36;
+  font-size: 11px;
+}
+
+.edit-product-image label {
+  width: 100%;
+}
+
+.edit-product-image input[type='file'] {
+  font-size: 11px;
+}
+
+.edit-product-preview img {
+  display: block;
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.edit-product-image small {
+  color: #8b745f;
+  line-height: 1.5;
+}
+
+.edit-image-undo {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #a13f27;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.edit-product-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.edit-product-footer .checkout-button {
+  width: auto;
+  margin-top: 0;
+}
+
+.edit-product-cancel {
+  padding: 11px 14px;
+  border: 1px solid #e6cdb0;
+  border-radius: 7px;
+  background: #fff;
+  color: #78482e;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .catalog-product-actions { grid-column: 3; grid-row: 1 / 3; flex-direction: column; }
+  .edit-product-modal { width: 100%; padding: 23px 18px; }
 }
 
 @media (max-width: 900px) {

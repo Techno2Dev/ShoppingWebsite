@@ -89,12 +89,47 @@
           <span class="catalog-product-image"><img *ngIf="product.imageUrl" [src]="product.imageUrl" [alt]="product.name"><span *ngIf="!product.imageUrl">{{ product.image }}</span></span>
           <div class="catalog-product-details"><strong>{{ product.name }}</strong><small>{{ product.category }} · {{ product.stock }} in stock</small></div>
           <strong class="catalog-product-price">{{ product.price | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong>
-          <button class="delete-product-button" type="button" (click)="deleteProduct(product)" [disabled]="deletingProductId !== null" [attr.aria-label]="'Remove ' + product.name">{{ deletingProductId === product.id ? 'Removing…' : 'Remove' }}</button>
+          <div class="catalog-product-actions">
+            <button class="edit-product-button" type="button" (click)="openEditProduct(product)" [disabled]="deletingProductId !== null" [attr.aria-label]="'Edit ' + product.name">Edit</button>
+            <button class="delete-product-button" type="button" (click)="deleteProduct(product)" [disabled]="deletingProductId !== null" [attr.aria-label]="'Remove ' + product.name">{{ deletingProductId === product.id ? 'Removing…' : 'Remove' }}</button>
+          </div>
         </article>
         <p class="no-products" *ngIf="!adminProducts.length && !loadingAdmin">No products yet. Add your first product above.</p>
       </div>
     </section>
   </main>
+
+  <div class="account-modal-overlay" *ngIf="editingProduct && editProductDraft && adminOpen && adminAuthenticated" (click)="closeEditProduct()">
+    <section class="credentials-modal edit-product-modal" role="dialog" aria-modal="true" aria-labelledby="edit-product-title" (click)="$event.stopPropagation()">
+      <div class="credentials-modal-heading">
+        <div><span class="eyebrow">PRODUCT COLLECTION</span><h2 id="edit-product-title">Edit product</h2></div>
+        <button class="close-button" type="button" aria-label="Close edit product" (click)="closeEditProduct()" [disabled]="savingProductEdit">×</button>
+      </div>
+      <p class="credentials-intro">Update the listing. Stock is the quantity currently available to sell; existing orders keep their original prices and items.</p>
+      <div class="error-banner modal-error" *ngIf="editProductError" role="alert">{{ editProductError }}</div>
+      <form class="credentials-form edit-product-form" (ngSubmit)="saveProductEdit()">
+        <label>Product name<input name="editName" [(ngModel)]="editProductDraft.name" required maxlength="120"></label>
+        <label>Description<textarea name="editDescription" [(ngModel)]="editProductDraft.description" required maxlength="1000" rows="3"></textarea></label>
+        <div class="edit-product-fields">
+          <label>Price (₹)<input name="editPrice" type="number" [(ngModel)]="editProductDraft.price" required min="0.01" max="99999999.99" step="0.01"></label>
+          <label>Available stock<input name="editStock" type="number" [(ngModel)]="editProductDraft.stock" required min="0" max="1000000" step="1"></label>
+        </div>
+        <label>Category<input name="editCategory" [(ngModel)]="editProductDraft.category" required maxlength="60"></label>
+        <div class="edit-product-image">
+          <span>Image</span>
+          <div class="edit-product-preview" *ngIf="editProductImagePreview && (!editProductDraft.image || editProductImageFile)"><img [src]="editProductImagePreview" [alt]="editProductDraft.name + ' preview'"></div>
+          <label>Replace with an image file<input #editImageInput name="editImageFile" type="file" accept="image/jpeg,image/png,image/gif,image/webp" (change)="onEditProductImageSelected($event)"></label>
+          <button class="edit-image-undo" type="button" *ngIf="editProductImageFile" (click)="clearEditProductImage(); editImageInput.value = ''">Keep original image instead</button>
+          <label>Or use an emoji<input name="editImage" [(ngModel)]="editProductDraft.image" maxlength="200" [disabled]="!!editProductImageFile" [required]="!editingProduct.imageUrl && !editProductImageFile" placeholder="🍲"></label>
+          <small *ngIf="editingProduct.imageUrl && !editProductImageFile && !editProductDraft.image">Leave both fields unchanged to keep the current image.</small>
+        </div>
+        <div class="edit-product-footer">
+          <button class="edit-product-cancel" type="button" (click)="closeEditProduct()" [disabled]="savingProductEdit">Cancel</button>
+          <button class="checkout-button" type="submit" [disabled]="savingProductEdit">{{ savingProductEdit ? 'Saving…' : 'Save changes' }} <span>↗</span></button>
+        </div>
+      </form>
+    </section>
+  </div>
 
   <div class="order-detail-overlay" *ngIf="selectedAdminOrder && adminOpen && adminAuthenticated" (click)="closeAdminOrderDetails()">
     <section class="order-detail-dialog" role="dialog" aria-modal="true" [attr.aria-label]="'Order ' + selectedAdminOrder.id + ' shipping and items'" (click)="$event.stopPropagation()">
