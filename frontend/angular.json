@@ -33,6 +33,9 @@
             "scripts": []
           },
           "configurations": {
+            "development": {
+              "sourceMap": false
+            },
             "production": {
               "fileReplacements": [
                 {
@@ -67,7 +70,7 @@
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
           "options": {
-            "browserTarget": "frontend:build"
+            "browserTarget": "frontend:build:development"
           },
           "configurations": {
             "production": {

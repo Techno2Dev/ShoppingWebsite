@@ -16,12 +16,13 @@
         <button class="customer-avatar-button" type="button" (click)="customerMenuOpen = !customerMenuOpen" aria-label="Customer profile menu" [attr.aria-expanded]="customerMenuOpen">
           <img *ngIf="customerProfile.photoUrl" [src]="customerProfile.photoUrl" alt="" referrerpolicy="no-referrer">
           <span *ngIf="!customerProfile.photoUrl">{{ customerProfile.name.charAt(0) }}</span>
+          <span class="customer-avatar-chevron" aria-hidden="true"></span>
         </button>
         <div class="customer-menu-options" *ngIf="customerMenuOpen">
           <span>{{ customerProfile.name }}</span>
           <button type="button" (click)="goToCustomerPage('orders')">My Orders</button>
           <button type="button" (click)="goToCustomerPage('details')">My Details</button>
-          <button type="button" (click)="customerLogout()">Sign out</button>
+          <button type="button" (click)="customerLogout()" [disabled]="customerSigningOut" [attr.aria-busy]="customerSigningOut"><span class="spinner signout-spinner" *ngIf="customerSigningOut" aria-hidden="true"></span>{{ customerSigningOut ? 'Signing out…' : 'Sign out' }}</button>
         </div>
       </div>
       <button class="bag-button" *ngIf="!adminOpen" [class.bag-pulse]="bagPulse" type="button" (click)="openBagFromProduct()" [attr.aria-label]="'Open shopping bag, ' + cartCount + ' items'">
@@ -75,12 +76,18 @@
     </aside>
   </main>
 
+  <button class="shop-go-to-cart" type="button" *ngIf="!adminOpen && customerPage === 'shop' && cartCount > 0 && !cartOpen && !selectedProduct && orderSuccessId === null" (click)="openBagFromProduct()" [attr.aria-label]="'Go to cart, ' + cartCount + ' items'">
+    Go to cart <span class="shop-go-to-cart-count" aria-hidden="true">{{ cartCount }}</span> <span aria-hidden="true">↗</span>
+  </button>
+
   <main class="customer-account-page" *ngIf="!adminOpen && customerPage === 'orders'" @pageEnter>
     <div class="customer-account-heading"><div><span class="eyebrow">YOUR ACCOUNT</span><h1>My Orders</h1></div><button type="button" (click)="goToCustomerPage('shop')">← Back to shop</button></div>
-    <div *ngIf="!customerProfile" class="customer-account-card"><p>Sign in with Google to view orders placed while signed in. Guest checkout is still available without an account.</p><button class="customer-account-action" type="button" (click)="openCustomerLogin()">Login · Continue with Google</button></div>
+    <div class="loading-state customer-orders-loading" *ngIf="checkingCustomerSession" role="status"><span class="spinner" aria-hidden="true"></span> Checking your session…</div>
+    <div *ngIf="!customerProfile && !checkingCustomerSession" class="customer-account-card"><p>Sign in with Google to view orders placed while signed in. Guest checkout is still available without an account.</p><button class="customer-account-action" type="button" (click)="openCustomerLogin()">Login · Continue with Google</button></div>
     <ng-container *ngIf="customerProfile">
       <p class="customer-account-message" *ngIf="customerOrdersError" role="alert">{{ customerOrdersError }}</p>
-      <button class="customer-account-action" type="button" (click)="loadMyOrders()" [disabled]="customerOrdersLoading">{{ customerOrdersLoading ? 'Loading…' : 'Refresh orders' }}</button>
+      <button class="customer-account-action" type="button" (click)="loadMyOrders()" [disabled]="customerOrdersLoading"><span class="spinner customer-orders-button-spinner" *ngIf="customerOrdersLoading && customerOrders.length" aria-hidden="true"></span>{{ customerOrdersLoading ? 'Refreshing…' : 'Refresh orders' }}</button>
+      <div class="loading-state customer-orders-loading" *ngIf="customerOrdersLoading && !customerOrders.length" role="status"><span class="spinner" aria-hidden="true"></span> Loading your orders…</div>
       <div class="customer-account-card" *ngIf="currentOrder && paymentAccessToken && !customerOrdersLoading && !customerOrdersContain(currentOrder.id)">
         <p>Have a guest order from this tab? Link it to this account using its private order token.</p>
         <button class="customer-account-action" type="button" (click)="claimCurrentGuestOrder()">Add order #{{ currentOrder.id }} to My Orders</button>
@@ -93,7 +100,7 @@
         <p *ngFor="let item of order.items">{{ item.productName }} × {{ item.quantity }}</p>
         <strong>{{ order.total | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong>
       </article>
-      <button class="customer-account-action" type="button" *ngIf="customerOrders.length < customerOrdersTotal" (click)="loadMyOrders(customerOrdersPage + 1)" [disabled]="customerOrdersLoading">{{ customerOrdersLoading ? 'Loading…' : 'Load older orders' }}</button>
+      <button class="customer-account-action" type="button" *ngIf="customerOrders.length < customerOrdersTotal" (click)="loadMyOrders(customerOrdersPage + 1)" [disabled]="customerOrdersLoading"><span class="spinner customer-orders-button-spinner" *ngIf="customerOrdersLoading" aria-hidden="true"></span>{{ customerOrdersLoading ? 'Loading older orders…' : 'Load older orders' }}</button>
     </ng-container>
   </main>
 
@@ -118,7 +125,7 @@
       <div #googleButton class="google-sign-in-button" aria-label="Continue with Google"></div>
       <p *ngIf="customerAuthBusy" role="status">Signing in…</p>
       <p class="customer-login-error" *ngIf="customerAuthError" role="alert">{{ customerAuthError }}</p>
-      <button class="customer-guest-button" type="button" (click)="customerLoginOpen = false; goToCustomerPage('shop')">Continue as guest</button>
+      <button class="customer-guest-button" type="button" (click)="continueAsGuest()">Continue as guest</button>
     </section>
   </div>
 
@@ -141,7 +148,7 @@
             <strong [attr.aria-label]="cartQuantity(selectedProduct.id) + ' in bag'">{{ cartQuantity(selectedProduct.id) }}</strong>
             <button type="button" (click)="addToCart(selectedProduct)" [disabled]="cartQuantity(selectedProduct.id) >= selectedProduct.stock" [attr.aria-label]="'Add one ' + selectedProduct.name">+</button>
           </div>
-          <button class="product-detail-view-bag" type="button" (click)="openBagFromProduct()">View bag ↗</button>
+          <button class="product-detail-view-bag" type="button" (click)="openBagFromProduct()">Go to cart ↗</button>
         </div>
       </div>
     </section>
@@ -165,7 +172,7 @@
   </main>
 
   <main class="admin-page" *ngIf="adminOpen && adminAuthenticated" @pageEnter>
-    <div class="admin-heading"><div><span class="eyebrow">SAPANA’S KITCHEN KATTA</span><h1>Store <em>dashboard.</em></h1><p>Signed in as {{ adminUserName }}. Manage products and customer orders.</p></div><div class="admin-heading-actions"><button class="refresh-button" (click)="loadAdminData()">↻ &nbsp;Refresh</button><button class="account-button" type="button" (click)="openAccountSettings()">{{ accountSettingsOpen ? 'Close settings' : 'Change login' }}</button><button class="logout-button" (click)="logoutAdmin()">Sign out</button></div></div>
+    <div class="admin-heading"><div><span class="eyebrow">SAPANA’S KITCHEN KATTA</span><h1>Store <em>dashboard.</em></h1><p>Signed in as {{ adminUserName }}. Manage products and customer orders.</p></div><div class="admin-heading-actions"><button class="refresh-button" (click)="loadAdminData()">↻ &nbsp;Refresh</button><button class="account-button" type="button" (click)="openAccountSettings()">{{ accountSettingsOpen ? 'Close settings' : 'Change login' }}</button><button class="logout-button" (click)="logoutAdmin()" [disabled]="adminSigningOut" [attr.aria-busy]="adminSigningOut"><span class="spinner signout-spinner" *ngIf="adminSigningOut" aria-hidden="true"></span>{{ adminSigningOut ? 'Signing out…' : 'Sign out' }}</button></div></div>
     <div class="error-banner" *ngIf="errorMessage" role="alert">{{ errorMessage }} <button (click)="errorMessage = ''" aria-label="Dismiss">×</button></div>
     <div class="admin-update-toast" *ngIf="adminToastMessage" role="status" aria-live="polite">
       <span class="admin-update-icon" aria-hidden="true">✓</span>
@@ -308,7 +315,15 @@
   <aside class="cart-drawer" [class.drawer-open]="cartOpen" [attr.aria-hidden]="!cartOpen"><div class="drawer-heading"><div><span class="eyebrow">YOUR SHOPPING BAG</span><h2>Shopping bag <span>({{ cartCount }})</span></h2></div><button class="close-button" (click)="cartOpen = false" aria-label="Close shopping bag">×</button></div>
     <div class="cart-lines" *ngIf="cart.length"><article class="cart-line" *ngFor="let line of cart"><span class="cart-emoji"><img *ngIf="line.product.imageUrl" [src]="line.product.imageUrl" [alt]="line.product.name"><span *ngIf="!line.product.imageUrl">{{ line.product.image }}</span></span><div class="cart-line-info"><strong>{{ line.product.name }}</strong><small>{{ line.product.price | currency:'INR':'symbol':'1.2-2':'en-IN' }}</small><div class="quantity-control"><button (click)="changeQuantity(line.product.id, -1)" aria-label="Decrease quantity">−</button><span>{{ line.quantity }}</span><button (click)="changeQuantity(line.product.id, 1)" aria-label="Increase quantity">+</button><button class="remove-line" (click)="removeFromCart(line.product.id)">Remove</button></div></div><strong class="line-total">{{ line.product.price * line.quantity | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong></article></div>
     <div class="cart-empty" *ngIf="!cart.length"><span>✳</span><h3>Your bag is empty.</h3><p>Add a product from the collection to get started.</p><button class="primary-link" (click)="cartOpen = false">Continue shopping <span>↗</span></button></div>
-    <form class="checkout-form" *ngIf="cart.length" (ngSubmit)="placeOrder()"><div class="checkout-total"><span>Total</span><strong>{{ cartTotal | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong></div><p class="checkout-note">Free shipping across India.</p><fieldset class="checkout-payment-methods"><legend>Payment modes</legend><label><input type="radio" name="paymentMethod" [(ngModel)]="paymentMethod" value="UPI"><span>UPI QR<small>Manual bank verification</small></span></label><label [class.payment-method-unavailable]="!razorpayAvailable"><input type="radio" name="paymentMethod" [(ngModel)]="paymentMethod" value="Razorpay" [disabled]="!razorpayAvailable"><span>Razorpay<small>{{ razorpayAvailable ? 'Test mode · no real charge' : 'Test gateway not configured' }}</small></span></label></fieldset><label>Your name<input name="customerName" [(ngModel)]="customerName" autocomplete="name" required maxlength="120" placeholder="Name"></label><label>Email address<input name="email" type="email" [(ngModel)]="email" autocomplete="email" required maxlength="254" placeholder="you@example.com"></label><label>Shipping address<textarea name="address" [(ngModel)]="address" autocomplete="street-address" required maxlength="500" rows="3" placeholder="Address"></textarea></label><button class="checkout-button" type="submit" [disabled]="submittingOrder">{{ submittingOrder ? 'Placing your order…' : 'Place order · ' + (cartTotal | currency:'INR':'symbol':'1.2-2':'en-IN') }} <span>↗</span></button><small class="secure-note">A simple guest checkout. No account needed.</small></form>
+    <div class="cart-checkout-choice" *ngIf="cart.length && !customerProfile && !guestCheckoutSelected">
+      <span class="eyebrow">READY TO CHECK OUT?</span>
+      <h3>Choose how to continue</h3>
+      <p *ngIf="!checkingCustomerSession">Sign in to save your order to My Orders, or check out as a guest. No account is required.</p>
+      <p *ngIf="checkingCustomerSession" role="status">Checking your saved session…</p>
+      <button class="cart-checkout-google" type="button" (click)="openCustomerLogin()" [disabled]="checkingCustomerSession">Continue with Google</button>
+      <button class="cart-checkout-guest" type="button" (click)="continueAsGuest()" [disabled]="checkingCustomerSession">Stay as guest <span aria-hidden="true">↗</span></button>
+    </div>
+    <form class="checkout-form" *ngIf="cart.length && (customerProfile || guestCheckoutSelected)" (ngSubmit)="placeOrder()"><div class="checkout-total"><span>Total</span><strong>{{ cartTotal | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong></div><p class="checkout-note">Free shipping across India.</p><fieldset class="checkout-payment-methods"><legend>Payment modes</legend><label><input type="radio" name="paymentMethod" [(ngModel)]="paymentMethod" value="UPI"><span>UPI QR<small>Manual bank verification</small></span></label><label [class.payment-method-unavailable]="!razorpayAvailable"><input type="radio" name="paymentMethod" [(ngModel)]="paymentMethod" value="Razorpay" [disabled]="!razorpayAvailable"><span>Razorpay<small>{{ razorpayAvailable ? 'Test mode · no real charge' : 'Test gateway not configured' }}</small></span></label></fieldset><label>Your name<input name="customerName" [(ngModel)]="customerName" autocomplete="name" required maxlength="120" placeholder="Name"></label><label>Email address<input name="email" type="email" [(ngModel)]="email" autocomplete="email" required maxlength="254" placeholder="you@example.com"></label><label>Shipping address<textarea name="address" [(ngModel)]="address" autocomplete="street-address" required maxlength="500" rows="3" placeholder="Address"></textarea></label><button class="checkout-button" type="submit" [disabled]="submittingOrder">{{ submittingOrder ? 'Placing your order…' : 'Place order · ' + (cartTotal | currency:'INR':'symbol':'1.2-2':'en-IN') }} <span>↗</span></button><small class="secure-note">A simple guest checkout. No account needed.</small></form>
   </aside>
 
   <div class="success-overlay" *ngIf="orderSuccessId !== null && !adminOpen" @dialogMotion>

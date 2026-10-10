@@ -51,9 +51,12 @@ export class AppComponent implements OnInit {
   adminOpen = false;
   customerPage: 'shop' | 'orders' | 'details' = 'shop';
   customerProfile: CustomerProfile | null = null;
+  guestCheckoutSelected = false;
+  checkingCustomerSession = false;
   customerLoginOpen = false;
   customerMenuOpen = false;
   customerAuthBusy = false;
+  customerSigningOut = false;
   customerAuthError = '';
   googleClientId = '';
   customerOrders: StoreOrder[] = [];
@@ -66,7 +69,12 @@ export class AppComponent implements OnInit {
   customerDetailsName = '';
   customerDetailsAddress = '';
   private googleScriptPromise: Promise<void> | null = null;
-  @ViewChild('googleButton', { static: false }) googleButton?: ElementRef<HTMLElement>;
+  private googleButtonElement?: HTMLElement;
+  @ViewChild('googleButton', { static: false })
+  set googleButton(button: ElementRef<HTMLElement> | undefined) {
+    this.googleButtonElement = button && button.nativeElement;
+    if (this.googleButtonElement) { this.renderGoogleButton(this.googleButtonElement); }
+  }
   adminAuthenticated = false;
   checkingAdminSession = false;
   private adminSessionRequestId = 0;
@@ -74,6 +82,7 @@ export class AppComponent implements OnInit {
   adminLoginUserName = '';
   adminLoginPassword = '';
   loggingAdminLogin = false;
+  adminSigningOut = false;
   accountSettingsOpen = false;
   updatingAdminCredentials = false;
   currentAdminPassword = '';
@@ -149,12 +158,20 @@ export class AppComponent implements OnInit {
     this.restorePendingPayment();
     this.loadProducts();
     this.syncCustomerPage();
-    this.storeApi.googleConfig().subscribe(config => { this.googleClientId = config.clientId; });
+    this.storeApi.googleConfig().subscribe(config => {
+      this.googleClientId = config.clientId;
+      if (this.googleButtonElement) { this.renderGoogleButton(this.googleButtonElement); }
+    });
     if (this.storeApi.hasCustomerSession()) {
+      this.checkingCustomerSession = true;
       this.storeApi.customerMe().subscribe(customer => {
+        this.checkingCustomerSession = false;
         this.setCustomer(customer);
         if (this.customerPage === 'orders') { this.loadMyOrders(); }
-      }, () => this.storeApi.clearCustomerSession());
+      }, () => {
+        this.checkingCustomerSession = false;
+        this.storeApi.clearCustomerSession();
+      });
     }
     this.storeApi.razorpayAvailability().subscribe(result => { this.razorpayAvailable = result.enabled; }, () => { this.razorpayAvailable = false; });
   }
@@ -190,20 +207,26 @@ export class AppComponent implements OnInit {
     this.customerMenuOpen = false;
     if (!this.googleClientId) {
       this.customerAuthError = 'Google sign-in is not configured yet. Guest checkout is still available.';
-      return;
     }
+  }
+
+  private renderGoogleButton(button: HTMLElement): void {
+    if (!this.customerLoginOpen || !this.googleClientId) { return; }
+    this.customerAuthError = '';
     this.loadGoogleScript().then(() => this.zone.run(() => {
-      if (!this.customerLoginOpen || !this.googleButton) { return; }
+      if (!this.customerLoginOpen || this.googleButtonElement !== button) { return; }
       const google = (window as any).google;
       google.accounts.id.initialize({
         client_id: this.googleClientId,
         callback: (response: any) => this.zone.run(() => this.finishGoogleLogin(response.credential))
       });
-      this.googleButton.nativeElement.innerHTML = '';
-      google.accounts.id.renderButton(this.googleButton.nativeElement,
+      button.innerHTML = '';
+      google.accounts.id.renderButton(button,
         { theme: 'outline', size: 'large', text: 'continue_with', width: 270 });
     })).catch(() => this.zone.run(() => {
-      this.customerAuthError = 'Google sign-in could not load. Guest checkout is still available.';
+      if (this.customerLoginOpen && this.googleButtonElement === button) {
+        this.customerAuthError = 'Google sign-in could not load. Guest checkout is still available.';
+      }
     }));
   }
 
@@ -229,6 +252,7 @@ export class AppComponent implements OnInit {
     this.storeApi.customerGoogleLogin(credential).subscribe(result => {
       this.customerAuthBusy = false;
       this.customerLoginOpen = false;
+      this.guestCheckoutSelected = false;
       this.setCustomer(result.customer);
       if (this.customerPage === 'orders') { this.loadMyOrders(); }
     }, error => {
@@ -247,13 +271,17 @@ export class AppComponent implements OnInit {
   }
 
   customerLogout(): void {
+    if (this.customerSigningOut) { return; }
+    this.customerSigningOut = true;
     this.storeApi.customerLogout().subscribe(() => this.finishCustomerLogout(), () => this.finishCustomerLogout());
   }
 
   private finishCustomerLogout(): void {
+    this.customerSigningOut = false;
     this.storeApi.clearCustomerSession();
     this.customerProfile = null;
     this.customerOrders = [];
+    this.guestCheckoutSelected = false;
     this.customerName = '';
     this.email = '';
     this.address = '';
@@ -338,6 +366,15 @@ export class AppComponent implements OnInit {
   openBagFromProduct(): void {
     this.closeProductDetails();
     this.cartOpen = true;
+  }
+
+  continueAsGuest(): void {
+    this.customerLoginOpen = false;
+    this.guestCheckoutSelected = true;
+    if (!this.customerProfile && this.storeApi.hasCustomerSession()) {
+      this.storeApi.clearCustomerSession();
+    }
+    if (this.customerPage !== 'shop') { this.goToCustomerPage('shop'); }
   }
 
   @HostListener('document:keydown.escape')
@@ -480,6 +517,7 @@ export class AppComponent implements OnInit {
       this.cartOpen = false;
       this.accountSettingsOpen = false;
       this.cart = [];
+      this.guestCheckoutSelected = false;
       this.customerName = '';
       this.email = '';
       this.address = '';
@@ -566,7 +604,10 @@ export class AppComponent implements OnInit {
   }
 
   logoutAdmin(): void {
+    if (this.adminSigningOut) { return; }
+    this.adminSigningOut = true;
     this.storeApi.adminLogout().subscribe(() => {
+      this.adminSigningOut = false;
       this.adminAuthenticated = false;
       this.dismissAdminToast();
       this.selectedAdminOrder = null;
@@ -577,6 +618,7 @@ export class AppComponent implements OnInit {
       this.orders = [];
       this.adminProducts = [];
     }, error => {
+      this.adminSigningOut = false;
       this.errorMessage = this.messageFrom(error, 'Could not sign out. Please try again.');
     });
   }
