@@ -1,23 +1,23 @@
-<div class="store-shell">
+<div class="store-shell" [@.disabled]="reduceMotion">
   <div class="splash-screen" *ngIf="splashVisible" role="status" aria-live="polite">
     <img src="assets/sapana-kitchen-katta-logo.png" alt="Sapana’s Kitchen Katta">
     <span class="splash-spinner" aria-hidden="true"></span>
     <p>Preparing your shopping experience</p>
   </div>
   <header class="topbar">
-    <a class="brand" href="#shop" (click)="showShop()">
+    <a class="brand" href="/" (click)="reloadHome($event)">
       <img src="assets/sapana-kitchen-katta-logo.png" alt="" class="brand-logo">
       <span>Sapana’s Kitchen Katta<small>THOUGHTFULLY SELECTED · MADE WITH CARE</small></span>
     </a>
     <div class="header-actions">
       <button class="admin-link" type="button" (click)="toggleAdmin()">{{ adminOpen ? 'Back to shop' : 'Admin' }}</button>
-      <button class="bag-button" *ngIf="!adminOpen" [class.bag-pulse]="bagPulse" type="button" (click)="cartOpen = true" [attr.aria-label]="'Open shopping bag, ' + cartCount + ' items'">
+      <button class="bag-button" *ngIf="!adminOpen" [class.bag-pulse]="bagPulse" type="button" (click)="openBagFromProduct()" [attr.aria-label]="'Open shopping bag, ' + cartCount + ' items'">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l1 13H4L5 8Z"></path><path d="M9 9V6a3 3 0 0 1 6 0v3"></path></svg>
         <span>Bag</span><span class="bag-count">{{ cartCount }}</span>
       </button>
     </div>
   </header>
-  <main class="product-page" *ngIf="!adminOpen" id="shop">
+  <main class="product-page" *ngIf="!adminOpen" @pageEnter id="shop">
     <section class="collection" id="collection">
       <div class="collection-tools">
         <div class="category-tabs" aria-label="Filter by category"><button *ngFor="let category of categories" (click)="activeCategory = category" [class.selected]="activeCategory === category">{{ category }}</button></div>
@@ -28,10 +28,18 @@
       <div class="loading-state" *ngIf="loadingProducts"><span class="spinner"></span> Loading products…</div>
       <div class="empty-state" *ngIf="!loadingProducts && !filteredProducts.length">No products found. Try another search or category.</div>
       <div class="product-grid" *ngIf="!loadingProducts">
-        <article class="product-card" *ngFor="let product of filteredProducts; trackBy: trackProduct">
-          <div class="product-visual" [attr.data-category]="product.category"><span class="product-category">{{ product.category }}</span><img *ngIf="product.imageUrl" class="product-photo" [src]="product.imageUrl" [alt]="product.name"><span *ngIf="!product.imageUrl" class="product-emoji">{{ product.image }}</span><span class="stock-label" *ngIf="product.stock > 0 && product.stock < 5">Only {{ product.stock }} left</span></div>
-          <div class="product-info"><div><h3>{{ product.name }}</h3><p>{{ product.description }}</p></div><strong class="price">{{ product.price | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong></div>
-          <button class="add-button" (click)="addToCart(product)" [disabled]="product.stock < 1"><span>{{ product.stock < 1 ? 'Unavailable' : 'Add to order' }}</span><span>{{ product.stock > 0 ? '+' : '—' }}</span></button>
+        <article class="product-card" *ngFor="let product of filteredProducts; trackBy: trackProduct" [class.product-just-added]="animatedProductId === product.id">
+          <button class="product-visual product-visual-button" type="button" [attr.data-category]="product.category" (click)="openProductDetails(product)" [attr.aria-label]="'View details for ' + product.name"><span class="product-category">{{ product.category }}</span><img *ngIf="product.imageUrl" class="product-photo" [src]="product.imageUrl" [alt]="product.name"><span *ngIf="!product.imageUrl" class="product-emoji">{{ product.image }}</span><span class="stock-label" *ngIf="product.stock > 0 && product.stock < 5">Only {{ product.stock }} left</span></button>
+          <div class="product-info"><div><h3><button class="product-name-button" type="button" (click)="openProductDetails(product)">{{ product.name }}</button></h3><p>{{ product.description }}</p></div><strong class="price">{{ product.price | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong></div>
+          <button class="add-button" type="button" *ngIf="!cartQuantity(product.id)" (click)="addToCart(product)" [disabled]="product.stock < 1"><span>{{ product.stock < 1 ? 'Unavailable' : 'Add to order' }}</span><span>{{ product.stock > 0 ? '+' : '—' }}</span></button>
+          <div class="product-card-quantity" *ngIf="cartQuantity(product.id)" aria-label="Quantity in bag">
+            <span>In your bag</span>
+            <div class="product-quantity-controls">
+              <button type="button" (click)="changeQuantity(product.id, -1)" [attr.aria-label]="'Remove one ' + product.name">−</button>
+              <strong [attr.aria-label]="cartQuantity(product.id) + ' in bag'">{{ cartQuantity(product.id) }}</strong>
+              <button type="button" (click)="addToCart(product)" [disabled]="cartQuantity(product.id) >= product.stock" [attr.aria-label]="'Add one ' + product.name">+</button>
+            </div>
+          </div>
         </article>
       </div>
     </section>
@@ -54,7 +62,36 @@
     </aside>
   </main>
 
-  <main class="admin-login-page" *ngIf="adminOpen && !adminAuthenticated">
+  <div class="product-detail-overlay" *ngIf="selectedProduct && !adminOpen" @dialogMotion (click)="closeProductDetails()">
+    <section class="product-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="product-detail-title" (click)="$event.stopPropagation()">
+      <button class="product-detail-close" type="button" aria-label="Close product details" (click)="closeProductDetails()">×</button>
+      <div class="product-detail-visual"><img *ngIf="selectedProduct.imageUrl" [src]="selectedProduct.imageUrl" [alt]="selectedProduct.name"><span *ngIf="!selectedProduct.imageUrl" aria-hidden="true">{{ selectedProduct.image }}</span></div>
+      <div class="product-detail-copy">
+        <span class="eyebrow">{{ selectedProduct.category }}</span>
+        <h2 id="product-detail-title">{{ selectedProduct.name }}</h2>
+        <strong class="product-detail-price">{{ selectedProduct.price | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong>
+        <p>{{ selectedProduct.description }}</p>
+        <span class="product-detail-stock">{{ selectedProduct.stock > 0 ? selectedProduct.stock + ' available' : 'Currently unavailable' }}</span>
+        <div class="product-detail-error" *ngIf="errorMessage" role="alert">{{ errorMessage }}</div>
+        <button class="product-detail-add" type="button" *ngIf="!cartQuantity(selectedProduct.id)" (click)="addToCart(selectedProduct)" [disabled]="selectedProduct.stock < 1">{{ selectedProduct.stock > 0 ? 'Add to bag +' : 'Unavailable' }}</button>
+        <div class="product-detail-quantity" *ngIf="cartQuantity(selectedProduct.id)">
+          <span>In your bag</span>
+          <div class="product-quantity-controls">
+            <button type="button" (click)="changeQuantity(selectedProduct.id, -1)" [attr.aria-label]="'Remove one ' + selectedProduct.name">−</button>
+            <strong [attr.aria-label]="cartQuantity(selectedProduct.id) + ' in bag'">{{ cartQuantity(selectedProduct.id) }}</strong>
+            <button type="button" (click)="addToCart(selectedProduct)" [disabled]="cartQuantity(selectedProduct.id) >= selectedProduct.stock" [attr.aria-label]="'Add one ' + selectedProduct.name">+</button>
+          </div>
+          <button class="product-detail-view-bag" type="button" (click)="openBagFromProduct()">View bag ↗</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <main class="admin-login-page" *ngIf="adminOpen && checkingAdminSession" @pageEnter>
+    <div class="loading-state" role="status"><span class="spinner" aria-hidden="true"></span> Checking admin session…</div>
+  </main>
+
+  <main class="admin-login-page" *ngIf="adminOpen && !adminAuthenticated && !checkingAdminSession" @pageEnter>
     <form class="admin-login-card" (ngSubmit)="loginAdmin()">
       <img src="assets/sapana-kitchen-katta-logo.png" alt="Sapana’s Kitchen Katta" class="login-logo">
       <span class="eyebrow">ADMIN ACCESS</span>
@@ -67,7 +104,7 @@
     </form>
   </main>
 
-  <main class="admin-page" *ngIf="adminOpen && adminAuthenticated">
+  <main class="admin-page" *ngIf="adminOpen && adminAuthenticated" @pageEnter>
     <div class="admin-heading"><div><span class="eyebrow">SAPANA’S KITCHEN KATTA</span><h1>Store <em>dashboard.</em></h1><p>Signed in as {{ adminUserName }}. Manage products and customer orders.</p></div><div class="admin-heading-actions"><button class="refresh-button" (click)="loadAdminData()">↻ &nbsp;Refresh</button><button class="account-button" type="button" (click)="openAccountSettings()">{{ accountSettingsOpen ? 'Close settings' : 'Change login' }}</button><button class="logout-button" (click)="logoutAdmin()">Sign out</button></div></div>
     <div class="error-banner" *ngIf="errorMessage" role="alert">{{ errorMessage }} <button (click)="errorMessage = ''" aria-label="Dismiss">×</button></div>
     <div class="admin-update-toast" *ngIf="adminToastMessage" role="status" aria-live="polite">
@@ -123,7 +160,7 @@
     </section>
   </main>
 
-  <div class="account-modal-overlay" *ngIf="editingProduct && editProductDraft && adminOpen && adminAuthenticated" (click)="closeEditProduct()">
+  <div class="account-modal-overlay" *ngIf="editingProduct && editProductDraft && adminOpen && adminAuthenticated" @dialogMotion (click)="closeEditProduct()">
     <section class="credentials-modal edit-product-modal" role="dialog" aria-modal="true" aria-labelledby="edit-product-title" (click)="$event.stopPropagation()">
       <div class="credentials-modal-heading">
         <div><span class="eyebrow">PRODUCT COLLECTION</span><h2 id="edit-product-title">Edit product</h2></div>
@@ -155,7 +192,7 @@
     </section>
   </div>
 
-  <div class="order-detail-overlay" *ngIf="selectedAdminOrder && adminOpen && adminAuthenticated" (click)="closeAdminOrderDetails()">
+  <div class="order-detail-overlay" *ngIf="selectedAdminOrder && adminOpen && adminAuthenticated" @dialogMotion (click)="closeAdminOrderDetails()">
     <section class="order-detail-dialog" role="dialog" aria-modal="true" [attr.aria-label]="'Order ' + selectedAdminOrder.id + ' shipping and items'" (click)="$event.stopPropagation()">
       <div class="order-detail-heading">
         <div><span class="eyebrow">ORDER DETAILS</span><h2>Order #{{ selectedAdminOrder.id }}</h2><span class="order-detail-date">{{ selectedAdminOrder.createdAt | date:'medium' }}</span></div>
@@ -179,7 +216,7 @@
     </section>
   </div>
 
-  <div class="account-modal-overlay" *ngIf="accountSettingsOpen" (click)="closeAccountSettings()">
+  <div class="account-modal-overlay" *ngIf="accountSettingsOpen" @dialogMotion (click)="closeAccountSettings()">
     <section class="credentials-modal" role="dialog" aria-modal="true" aria-labelledby="credentials-title" (click)="$event.stopPropagation()">
       <div class="credentials-modal-heading">
         <div><span class="eyebrow">ACCOUNT SETTINGS</span><h2 id="credentials-title">Change admin login</h2></div>
@@ -203,7 +240,7 @@
     <form class="checkout-form" *ngIf="cart.length" (ngSubmit)="placeOrder()"><div class="checkout-total"><span>Subtotal</span><strong>{{ cartTotal | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong></div><p class="checkout-note">Free shipping across India. The amount shown is the amount to pay by UPI.</p><label>Your name<input name="customerName" [(ngModel)]="customerName" autocomplete="name" required maxlength="120" placeholder="Name"></label><label>Email address<input name="email" type="email" [(ngModel)]="email" autocomplete="email" required maxlength="254" placeholder="you@example.com"></label><label>Shipping address<textarea name="address" [(ngModel)]="address" autocomplete="street-address" required maxlength="500" rows="3" placeholder="Address"></textarea></label><button class="checkout-button" type="submit" [disabled]="submittingOrder">{{ submittingOrder ? 'Placing your order…' : 'Place order · ' + (cartTotal | currency:'INR':'symbol':'1.2-2':'en-IN') }} <span>↗</span></button><small class="secure-note">A simple guest checkout. No account needed.</small></form>
   </aside>
 
-  <div class="success-overlay" *ngIf="orderSuccessId !== null && !adminOpen">
+  <div class="success-overlay" *ngIf="orderSuccessId !== null && !adminOpen" @dialogMotion>
     <section class="success-card">
       <span class="success-icon">✳</span>
       <span class="eyebrow">ORDER RECEIVED</span>
@@ -248,7 +285,7 @@
     </section>
   </div>
   <footer class="site-footer" *ngIf="!adminOpen">
-    <a class="brand" href="#shop" (click)="showShop()">
+    <a class="brand" href="/" (click)="reloadHome($event)">
       <img src="assets/sapana-kitchen-katta-logo.png" alt="" class="brand-logo">
       <span>Sapana’s Kitchen Katta<small>THOUGHTFULLY SELECTED · MADE WITH CARE</small></span>
     </a>

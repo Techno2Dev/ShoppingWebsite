@@ -1,4 +1,5 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, HostListener, OnInit } from '@angular/core';
+import { animate, group, query, style, transition, trigger } from '@angular/animations';
 import * as QRCode from 'qrcode';
 import { environment } from '../environments/environment';
 import { CartLine, Product, StoreApiService, StoreOrder, AdminSummary } from './store-api.service';
@@ -6,16 +7,51 @@ import { CartLine, Product, StoreApiService, StoreOrder, AdminSummary } from './
 @Component({
   selector: 'app-root',
   templateUrl: './app.component.html',
-  styleUrls: ['./app.component.scss']
+  styleUrls: ['./app.component.scss'],
+  animations: [
+    trigger('pageEnter', [
+      transition(':enter', [
+        style({ opacity: 0, transform: 'translateY(10px)' }),
+        animate('260ms cubic-bezier(.2,.8,.2,1)', style({ opacity: 1, transform: 'translateY(0)' }))
+      ])
+    ]),
+    trigger('dialogMotion', [
+      transition(':enter', [
+        style({ opacity: 0 }),
+        group([
+          animate('210ms ease-out', style({ opacity: 1 })),
+          query('section', [
+            style({ opacity: 0, transform: 'translateY(12px) scale(.98)' }),
+            animate('250ms cubic-bezier(.2,.8,.2,1)', style({ opacity: 1, transform: 'translateY(0) scale(1)' }))
+          ], { optional: true })
+        ])
+      ]),
+      transition(':leave', [
+        group([
+          animate('170ms ease-in', style({ opacity: 0 })),
+          query('section', [
+            animate('170ms ease-in', style({ opacity: 0, transform: 'translateY(8px) scale(.98)' }))
+          ], { optional: true })
+        ])
+      ])
+    ])
+  ]
 })
 export class AppComponent implements OnInit {
+  readonly reduceMotion = typeof window !== 'undefined' && window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   products: Product[] = [];
   cart: CartLine[] = [];
+  selectedProduct: Product | null = null;
+  animatedProductId: number | null = null;
+  private productAnimationTimer: number | null = null;
   searchTerm = '';
   activeCategory = 'All';
   cartOpen = false;
   adminOpen = false;
   adminAuthenticated = false;
+  checkingAdminSession = false;
+  private adminSessionRequestId = 0;
   adminUserName = '';
   adminLoginUserName = '';
   adminLoginPassword = '';
@@ -109,6 +145,29 @@ export class AppComponent implements OnInit {
     return this.cart.reduce((total, line) => total + line.product.price * line.quantity, 0);
   }
 
+  cartQuantity(productId: number): number {
+    const line = this.cart.find(item => item.product.id === productId);
+    return line ? line.quantity : 0;
+  }
+
+  openProductDetails(product: Product): void {
+    this.selectedProduct = product;
+  }
+
+  closeProductDetails(): void {
+    this.selectedProduct = null;
+  }
+
+  openBagFromProduct(): void {
+    this.closeProductDetails();
+    this.cartOpen = true;
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.selectedProduct) { this.closeProductDetails(); }
+  }
+
   loadProducts(): void {
     this.loadingProducts = true;
     this.storeApi.getProducts().subscribe(products => {
@@ -138,12 +197,28 @@ export class AppComponent implements OnInit {
       existing.quantity++;
     } else if (product.stock > 0) {
       this.cart.push({ product: product, quantity: 1 });
+    } else {
+      return;
     }
     this.saveCart();
     this.notice = product.name + ' added to your bag';
     this.showNotice();
     this.pulseBag();
-    this.cartOpen = true;
+    this.animateProduct(product.id);
+  }
+
+  private animateProduct(productId: number): void {
+    if (this.productAnimationTimer !== null) {
+      window.clearTimeout(this.productAnimationTimer);
+    }
+    this.animatedProductId = null;
+    this.productAnimationTimer = window.setTimeout(() => {
+      this.animatedProductId = productId;
+      this.productAnimationTimer = window.setTimeout(() => {
+        this.animatedProductId = null;
+        this.productAnimationTimer = null;
+      }, 480);
+    }, 0);
   }
 
   private showNotice(): void {
@@ -189,6 +264,13 @@ export class AppComponent implements OnInit {
       this.cart = this.cart.filter(item => item.product.id !== productId);
     } else if (nextQuantity <= line.product.stock) {
       line.quantity = nextQuantity;
+      if (change > 0) {
+        this.pulseBag();
+        this.animateProduct(productId);
+      }
+    } else {
+      this.errorMessage = 'That is all the available stock for ' + line.product.name + '.';
+      return;
     }
     this.saveCart();
   }
@@ -234,8 +316,11 @@ export class AppComponent implements OnInit {
   }
 
   toggleAdmin(): void {
+    this.closeProductDetails();
     if (this.adminOpen) {
       this.adminOpen = false;
+      this.checkingAdminSession = false;
+      this.adminSessionRequestId++;
       this.dismissAdminToast();
       this.selectedAdminOrder = null;
       this.closeEditProduct();
@@ -257,12 +342,18 @@ export class AppComponent implements OnInit {
   }
 
   restoreAdminSession(): void {
+    const requestId = ++this.adminSessionRequestId;
+    this.checkingAdminSession = true;
     this.storeApi.getAdminSession().subscribe(session => {
+      if (requestId !== this.adminSessionRequestId || !this.adminOpen) { return; }
+      this.checkingAdminSession = false;
       this.adminAuthenticated = true;
       this.adminUserName = session.userName;
       this.errorMessage = '';
       this.loadAdminData();
     }, () => {
+      if (requestId !== this.adminSessionRequestId || !this.adminOpen) { return; }
+      this.checkingAdminSession = false;
       this.adminAuthenticated = false;
       this.adminUserName = '';
       this.storeApi.clearAdminToken();
@@ -357,6 +448,12 @@ export class AppComponent implements OnInit {
     this.cartOpen = false;
     this.orderSuccessId = null;
     this.errorMessage = '';
+  }
+
+  reloadHome(event: MouseEvent): void {
+    event.preventDefault();
+    window.history.replaceState(null, '', '/');
+    window.location.reload();
   }
 
   reopenPaymentDetails(): void {
