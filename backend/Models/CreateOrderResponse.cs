@@ -7,4 +7,5 @@ public sealed record CreateOrderResponse(
     string PaymentStatus,
     List<OrderItem> Items,
     string AccessToken,
-    string PaymentMethod);
+    string PaymentMethod,
+    string? MobileNumber);

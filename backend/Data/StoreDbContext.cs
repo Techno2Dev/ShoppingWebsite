@@ -18,6 +18,8 @@ public sealed class StoreDbContext(DbContextOptions<StoreDbContext> options) : D
         modelBuilder.Entity<Product>().Property(product => product.Price).HasPrecision(10, 2);
         modelBuilder.Entity<Order>().Property(order => order.Total).HasPrecision(10, 2);
         modelBuilder.Entity<Order>().Property(order => order.PaymentReference).HasMaxLength(100);
+        modelBuilder.Entity<Order>().Property(order => order.MobileNumber).HasMaxLength(10);
+        modelBuilder.Entity<CustomerUser>().Property(user => user.MobileNumber).HasMaxLength(10);
         modelBuilder.Entity<Order>().Property(order => order.TrackingId).HasMaxLength(100);
         modelBuilder.Entity<Order>().Property(order => order.PaymentVerifiedBy).HasMaxLength(100);
         modelBuilder.Entity<OrderItem>().Property(item => item.UnitPrice).HasPrecision(10, 2);

@@ -53,7 +53,7 @@ public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier te
         Response.Headers.CacheControl = "no-store";
         return Ok(new { items = orders.Select(order => new
         {
-            order.Id, order.CustomerName, order.Email, order.Address, order.CreatedAt,
+            order.Id, order.CustomerName, order.Email, order.MobileNumber, order.Address, order.CreatedAt,
             order.Total, order.PaymentMethod, order.PaymentStatus,
             order.FulfillmentStatus, order.TrackingId, order.Items
         }), totalCount, page, pageSize });
@@ -82,6 +82,8 @@ public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier te
         {
             return BadRequest(new { message = "Enter customer details and at least one valid item." });
         }
+        if (!IndianMobileNumber.TryNormalize(request.MobileNumber, out var mobileNumber))
+            return BadRequest(new { message = "Enter a valid 10-digit Indian mobile number." });
         if (request.PaymentMethod is not ("UPI" or "Razorpay"))
             return BadRequest(new { message = "Choose UPI or Razorpay." });
         if (request.PaymentMethod == "Razorpay" && !razorpay.Enabled)
@@ -115,6 +117,7 @@ public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier te
         {
             CustomerName = request.CustomerName.Trim(),
             Email = request.Email.Trim(),
+            MobileNumber = mobileNumber,
             Address = request.Address.Trim(),
             PaymentStatus = "Pending",
             PaymentMethod = request.PaymentMethod,
@@ -153,7 +156,8 @@ public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier te
             order.PaymentStatus,
             order.Items,
             accessToken,
-            order.PaymentMethod);
+            order.PaymentMethod,
+            order.MobileNumber);
         return Created($"/api/orders/{order.Id}/payment-status", response);
     }
 
@@ -300,5 +304,6 @@ public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier te
         order.Items,
         order.PaymentMethod,
         order.FulfillmentStatus,
-        order.TrackingId);
+        order.TrackingId,
+        order.MobileNumber);
 }

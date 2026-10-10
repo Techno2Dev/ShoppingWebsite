@@ -4,6 +4,7 @@ import * as QRCode from 'qrcode';
 import { environment } from '../environments/environment';
 import { CartLine, Product, StoreApiService, StoreOrder, AdminSummary, CustomerProfile } from './store-api.service';
 import { FestivalGreeting, festivalForIndiaDate } from './festival-schedule';
+import { supportContacts } from './support-contacts';
 
 @Component({
   selector: 'app-root',
@@ -45,6 +46,8 @@ import { FestivalGreeting, festivalForIndiaDate } from './festival-schedule';
   ]
 })
 export class AppComponent implements OnInit, OnDestroy {
+  readonly supportContacts = supportContacts;
+  supportOpen = false;
   readonly reduceMotion = typeof window !== 'undefined' && window.matchMedia &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   products: Product[] = [];
@@ -81,6 +84,7 @@ export class AppComponent implements OnInit, OnDestroy {
   savingCustomerDetails = false;
   customerDetailsMessage = '';
   customerDetailsName = '';
+  customerDetailsMobile = '';
   customerDetailsAddress = '';
   private googleScriptPromise: Promise<void> | null = null;
   private googleButtonElement?: HTMLElement;
@@ -163,6 +167,7 @@ export class AppComponent implements OnInit, OnDestroy {
   summary: AdminSummary = { totalOrders: 0, revenue: 0, pendingPayments: 0, productCount: 0 };
   customerName = '';
   email = '';
+  mobileNumber = '';
   address = '';
 
   constructor(private storeApi: StoreApiService, private zone: NgZone) { }
@@ -318,9 +323,11 @@ export class AppComponent implements OnInit, OnDestroy {
   private setCustomer(customer: CustomerProfile): void {
     this.customerProfile = customer;
     this.customerDetailsName = customer.name;
+    this.customerDetailsMobile = customer.mobileNumber || '';
     this.customerDetailsAddress = customer.deliveryAddress || '';
     if (!this.customerName) { this.customerName = customer.name; }
     if (!this.email) { this.email = customer.email; }
+    if (!this.mobileNumber) { this.mobileNumber = customer.mobileNumber || ''; }
     if (!this.address) { this.address = customer.deliveryAddress || ''; }
   }
 
@@ -338,6 +345,7 @@ export class AppComponent implements OnInit, OnDestroy {
     this.guestCheckoutSelected = false;
     this.customerName = '';
     this.email = '';
+    this.mobileNumber = '';
     this.address = '';
     this.goToCustomerPage('shop');
   }
@@ -373,7 +381,7 @@ export class AppComponent implements OnInit, OnDestroy {
     if (this.savingCustomerDetails || !this.customerProfile) { return; }
     this.savingCustomerDetails = true;
     this.customerDetailsMessage = '';
-    this.storeApi.updateCustomerDetails(this.customerDetailsName.trim(), this.customerDetailsAddress.trim()).subscribe(customer => {
+    this.storeApi.updateCustomerDetails(this.customerDetailsName.trim(), this.customerDetailsMobile.trim(), this.customerDetailsAddress.trim()).subscribe(customer => {
       this.savingCustomerDetails = false;
       this.setCustomer(customer);
       this.customerDetailsMessage = 'Details saved.';
@@ -410,6 +418,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   openProductDetails(product: Product): void {
+    this.supportOpen = false;
     this.selectedProduct = product;
   }
 
@@ -419,6 +428,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   openBagFromProduct(): void {
     this.closeProductDetails();
+    this.supportOpen = false;
     this.cartOpen = true;
   }
 
@@ -434,6 +444,7 @@ export class AppComponent implements OnInit, OnDestroy {
   @HostListener('document:keydown.escape')
   onEscape(): void {
     if (this.selectedProduct) { this.closeProductDetails(); }
+    else if (this.supportOpen) { this.supportOpen = false; }
   }
 
   loadProducts(): void {
@@ -556,6 +567,7 @@ export class AppComponent implements OnInit, OnDestroy {
     this.storeApi.createOrder({
       customerName: this.customerName.trim(),
       email: this.email.trim(),
+      mobileNumber: this.mobileNumber.trim(),
       address: this.address.trim(),
       paymentMethod: this.paymentMethod,
       items: this.cart.map(line => ({ productId: line.product.id, quantity: line.quantity }))
@@ -575,6 +587,7 @@ export class AppComponent implements OnInit, OnDestroy {
       this.guestCheckoutSelected = false;
       this.customerName = '';
       this.email = '';
+      this.mobileNumber = '';
       this.address = '';
       this.saveCart();
       this.submittingOrder = false;
@@ -590,6 +603,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   toggleAdmin(): void {
     this.closeProductDetails();
+    this.supportOpen = false;
     this.customerLoginOpen = false;
     if (!this.adminOpen && this.customerPage !== 'shop') { this.goToCustomerPage('shop'); }
     if (this.adminOpen) {
@@ -793,6 +807,7 @@ export class AppComponent implements OnInit, OnDestroy {
             order_id: checkout.orderId,
             name: 'Sapana’s Kitchen Katta',
             description: 'Test payment for order #' + order.id,
+            prefill: { contact: order.mobileNumber ? '+91' + order.mobileNumber : undefined },
             theme: { color: '#bd2b1d' },
             handler: (result: any) => this.zone.run(() => {
               checkoutSucceeded = true;

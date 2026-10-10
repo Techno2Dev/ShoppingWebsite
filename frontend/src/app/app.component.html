@@ -122,6 +122,7 @@
       <article class="customer-account-card customer-order-card" *ngFor="let order of customerOrders; trackBy: trackOrder">
         <div class="customer-order-heading"><strong>Order #{{ order.id }}</strong><span>{{ order.createdAt | date:'mediumDate' }}</span></div>
         <div class="customer-order-status"><span>Payment: <strong>{{ order.paymentStatus }}</strong></span><span>Order: <strong>{{ order.fulfillmentStatus || 'Order received' }}</strong></span></div>
+        <p *ngIf="order.mobileNumber">Mobile: {{ order.mobileNumber }}</p>
         <p *ngIf="order.trackingId">Tracking ID: <strong>{{ order.trackingId }}</strong></p>
         <p *ngFor="let item of order.items">{{ item.productName }} × {{ item.quantity }}</p>
         <strong>{{ order.total | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong>
@@ -137,6 +138,7 @@
       <img *ngIf="customerProfile.photoUrl" class="customer-details-photo" [src]="customerProfile.photoUrl" alt="Your Google profile photo" referrerpolicy="no-referrer">
       <p>Email: <strong>{{ customerProfile.email }}</strong> <small>(from your Google account)</small></p>
       <label>Name<input name="customerDetailsName" [(ngModel)]="customerDetailsName" maxlength="120" required></label>
+      <label>Mobile number (optional)<input name="customerDetailsMobile" type="tel" [(ngModel)]="customerDetailsMobile" inputmode="numeric" autocomplete="tel-national" minlength="10" maxlength="10" pattern="[6-9][0-9]{9}" placeholder="10-digit Indian mobile number"></label>
       <label>Delivery address<textarea name="customerDetailsAddress" [(ngModel)]="customerDetailsAddress" maxlength="500" rows="3"></textarea></label>
       <button class="customer-account-action" type="submit" [disabled]="savingCustomerDetails">{{ savingCustomerDetails ? 'Saving…' : 'Save details' }}</button>
       <p *ngIf="customerDetailsMessage" role="status">{{ customerDetailsMessage }}</p>
@@ -205,7 +207,7 @@
       <span>{{ adminToastMessage }}</span>
       <button type="button" (click)="dismissAdminToast()" aria-label="Dismiss admin update notification">×</button>
     </div>
-    <div class="admin-stats" *ngIf="!loadingAdmin"><article><span>ALL ORDERS</span><strong>{{ summary.totalOrders }}</strong><small>All customer orders</small></article><article><span>PAID REVENUE</span><strong>{{ summary.revenue | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong><small>From confirmed payments</small></article><article><span>AWAITING PAYMENT</span><strong>{{ summary.pendingPayments }}</strong><small>Pending admin action</small></article><article><span>PRODUCTS</span><strong>{{ summary.productCount }}</strong><small>Available in your collection</small></article></div>
+    <div class="admin-stats" *ngIf="!loadingAdmin"><article><span>ALL ORDERS</span><strong>{{ summary.totalOrders }}</strong><small>All customer orders</small></article><article><span>PAID ORDER TOTAL</span><strong>{{ summary.revenue | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong><small>UPI + Razorpay (test payments simulated)</small></article><article><span>AWAITING PAYMENT</span><strong>{{ summary.pendingPayments }}</strong><small>Pending admin action</small></article><article><span>PRODUCTS</span><strong>{{ summary.productCount }}</strong><small>Available in your collection</small></article></div>
     <div class="loading-state" *ngIf="loadingAdmin"><span class="spinner"></span> Gathering your numbers…</div>
     <section class="orders-panel"><div class="orders-heading"><div><span class="eyebrow">{{ ordersPage === 1 ? 'THE LATEST' : 'ORDER HISTORY' }}</span><h2>{{ ordersPage === 1 ? 'Recent orders' : 'Older orders' }}</h2><p class="manual-admin-note">Check UPI receipts against your bank before manually marking an order Paid.</p></div><span>{{ ordersTotal }} total</span></div>
       <div class="order-history-nav" *ngIf="ordersTotal > ordersPageSize">
@@ -296,6 +298,8 @@
         <strong>{{ selectedAdminOrder.customerName }}</strong>
         <p>{{ selectedAdminOrder.address }}</p>
         <span>{{ selectedAdminOrder.email }}</span>
+        <p *ngIf="selectedAdminOrder.mobileNumber">Mobile: <a [href]="'tel:+91' + selectedAdminOrder.mobileNumber">{{ selectedAdminOrder.mobileNumber }}</a></p>
+        <p *ngIf="!selectedAdminOrder.mobileNumber">Mobile: Not provided on this older order</p>
       </div>
       <div class="order-detail-items">
         <h3>Items in this order</h3>
@@ -349,7 +353,7 @@
       <button class="cart-checkout-google" type="button" (click)="openCustomerLogin()" [disabled]="checkingCustomerSession">Continue with Google</button>
       <button class="cart-checkout-guest" type="button" (click)="continueAsGuest()" [disabled]="checkingCustomerSession">Stay as guest <span aria-hidden="true">↗</span></button>
     </div>
-    <form class="checkout-form" *ngIf="cart.length && (customerProfile || guestCheckoutSelected)" (ngSubmit)="placeOrder()"><div class="checkout-total"><span>Total</span><strong>{{ cartTotal | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong></div><p class="checkout-note">Free shipping across India.</p><fieldset class="checkout-payment-methods"><legend>Payment modes</legend><label><input type="radio" name="paymentMethod" [(ngModel)]="paymentMethod" value="UPI"><span>UPI QR<small>Manual bank verification</small></span></label><label [class.payment-method-unavailable]="!razorpayAvailable"><input type="radio" name="paymentMethod" [(ngModel)]="paymentMethod" value="Razorpay" [disabled]="!razorpayAvailable"><span>Razorpay<small>{{ razorpayAvailable ? 'Test mode · no real charge' : 'Test gateway not configured' }}</small></span></label></fieldset><label>Your name<input name="customerName" [(ngModel)]="customerName" autocomplete="name" required maxlength="120" placeholder="Name"></label><label>Email address<input name="email" type="email" [(ngModel)]="email" autocomplete="email" required maxlength="254" placeholder="you@example.com"></label><label>Shipping address<textarea name="address" [(ngModel)]="address" autocomplete="street-address" required maxlength="500" rows="3" placeholder="Address"></textarea></label><button class="checkout-button" type="submit" [disabled]="submittingOrder">{{ submittingOrder ? 'Placing your order…' : 'Place order · ' + (cartTotal | currency:'INR':'symbol':'1.2-2':'en-IN') }} <span>↗</span></button><small class="secure-note">A simple guest checkout. No account needed.</small></form>
+    <form class="checkout-form" *ngIf="cart.length && (customerProfile || guestCheckoutSelected)" (ngSubmit)="placeOrder()"><div class="checkout-total"><span>Total</span><strong>{{ cartTotal | currency:'INR':'symbol':'1.2-2':'en-IN' }}</strong></div><p class="checkout-note">Free shipping across India.</p><fieldset class="checkout-payment-methods"><legend>Payment modes</legend><label><input type="radio" name="paymentMethod" [(ngModel)]="paymentMethod" value="UPI"><span>UPI QR<small>Manual bank verification</small></span></label><label [class.payment-method-unavailable]="!razorpayAvailable"><input type="radio" name="paymentMethod" [(ngModel)]="paymentMethod" value="Razorpay" [disabled]="!razorpayAvailable"><span>Razorpay<small>{{ razorpayAvailable ? 'Test mode · no real charge' : 'Test gateway not configured' }}</small></span></label></fieldset><label>Your name<input name="customerName" [(ngModel)]="customerName" autocomplete="name" required maxlength="120" placeholder="Name"></label><label>Email address<input name="email" type="email" [(ngModel)]="email" autocomplete="email" required maxlength="254" placeholder="you@example.com"></label><label>Mobile number<input name="mobileNumber" type="tel" [(ngModel)]="mobileNumber" inputmode="numeric" autocomplete="tel-national" required minlength="10" maxlength="10" pattern="[6-9][0-9]{9}" placeholder="10-digit Indian mobile number"></label><label>Shipping address<textarea name="address" [(ngModel)]="address" autocomplete="street-address" required maxlength="500" rows="3" placeholder="Address"></textarea></label><button class="checkout-button" type="submit" [disabled]="submittingOrder">{{ submittingOrder ? 'Placing your order…' : 'Place order · ' + (cartTotal | currency:'INR':'symbol':'1.2-2':'en-IN') }} <span>↗</span></button><small class="secure-note">A simple guest checkout. No account needed.</small></form>
   </aside>
 
   <div class="success-overlay" *ngIf="orderSuccessId !== null && !adminOpen" @dialogMotion>
@@ -401,6 +405,36 @@
       <div class="payment-report-success" *ngIf="paymentReportMessage" role="status">{{ paymentReportMessage }}</div>
       <button class="checkout-button" (click)="showShop()">{{ paymentCanBeReported || currentOrder?.paymentReportedAt ? 'Continue shopping — payment details are saved' : 'Continue shopping' }} <span>↗</span></button>
     </section>
+  </div>
+  <div class="shop-support" *ngIf="!adminOpen && !cartOpen && !selectedProduct && !customerLoginOpen && orderSuccessId === null">
+    <div class="shop-support-popover" id="shop-support-panel" *ngIf="supportOpen" @dialogMotion>
+      <section role="dialog" aria-labelledby="shop-support-title" aria-describedby="shop-support-description">
+        <div class="shop-support-heading">
+          <div><span class="eyebrow">WE'RE HERE TO HELP</span><h2 id="shop-support-title">Need a hand?</h2></div>
+          <button type="button" class="shop-support-close" (click)="supportOpen = false" aria-label="Close support details">×</button>
+        </div>
+        <p id="shop-support-description">Questions about a product or an order? Find our support channels here.</p>
+        <div class="shop-support-links">
+          <div class="shop-support-item">
+            <span class="shop-support-item-icon" aria-hidden="true">@</span>
+            <div><strong>Email support</strong><a *ngIf="supportContacts.emailUrl" [href]="supportContacts.emailUrl">{{ supportContacts.email }}</a><span *ngIf="!supportContacts.emailUrl">{{ supportContacts.email }} · example only</span></div>
+          </div>
+          <div class="shop-support-item">
+            <span class="shop-support-item-icon" aria-hidden="true">◎</span>
+            <div><strong>Instagram</strong><a *ngIf="supportContacts.instagramUrl" [href]="supportContacts.instagramUrl" target="_blank" rel="noopener noreferrer">{{ supportContacts.instagram }} ↗</a><span *ngIf="!supportContacts.instagramUrl">{{ supportContacts.instagram }} · coming soon</span></div>
+          </div>
+          <div class="shop-support-item">
+            <span class="shop-support-item-icon" aria-hidden="true">▶</span>
+            <div><strong>YouTube channel</strong><a *ngIf="supportContacts.youtubeUrl" [href]="supportContacts.youtubeUrl" target="_blank" rel="noopener noreferrer">{{ supportContacts.youtube }} ↗</a><span *ngIf="!supportContacts.youtubeUrl">{{ supportContacts.youtube }} · coming soon</span></div>
+          </div>
+        </div>
+        <p class="shop-support-note" *ngIf="!supportContacts.emailUrl || !supportContacts.instagramUrl || !supportContacts.youtubeUrl">These are sample details. Please add the store's real contact information before relying on support.</p>
+      </section>
+    </div>
+    <button class="shop-support-toggle" type="button" (click)="supportOpen = !supportOpen" [attr.aria-expanded]="supportOpen" aria-controls="shop-support-panel" [attr.aria-label]="supportOpen ? 'Close support details' : 'Open support details'">
+      <svg *ngIf="!supportOpen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11.5a8 8 0 0 1-8 8 9 9 0 0 1-3.5-.7L4 20l1.2-4.5a8 8 0 1 1 14.8-4Z"></path><path d="M9 10a3 3 0 0 1 6 0c0 2-3 2-3 4"></path><circle cx="12" cy="16.5" r=".7" fill="currentColor" stroke="none"></circle></svg>
+      <span *ngIf="supportOpen" aria-hidden="true">×</span>
+    </button>
   </div>
   <footer class="site-footer" *ngIf="!adminOpen">
     <a class="brand" href="/" (click)="reloadHome($event)">

@@ -85,9 +85,17 @@ public sealed class CustomerAuthController(StoreDbContext db, IConfiguration con
         if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length > 120 ||
             request.DeliveryAddress?.Length > 500)
             return BadRequest(new { message = "Enter a name (up to 120 characters) and address (up to 500 characters)." });
+        string? mobileNumber = null;
+        if (!string.IsNullOrWhiteSpace(request.MobileNumber))
+        {
+            if (!IndianMobileNumber.TryNormalize(request.MobileNumber, out var validNumber))
+                return BadRequest(new { message = "Enter a valid 10-digit Indian mobile number." });
+            mobileNumber = validNumber;
+        }
         var customer = await CurrentCustomer(cancellationToken);
         if (customer is null) return Unauthorized();
         customer.Name = request.Name.Trim();
+        customer.MobileNumber = mobileNumber;
         customer.DeliveryAddress = string.IsNullOrWhiteSpace(request.DeliveryAddress) ? null : request.DeliveryAddress.Trim();
         await db.SaveChangesAsync(cancellationToken);
         return Ok(Profile(customer));
@@ -106,7 +114,7 @@ public sealed class CustomerAuthController(StoreDbContext db, IConfiguration con
     private Task<CustomerUser?> CurrentCustomer(CancellationToken cancellationToken) =>
         db.CustomerUsers.SingleOrDefaultAsync(item => item.Id == int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!), cancellationToken);
 
-    private static object Profile(CustomerUser user) => new { user.Id, user.Name, user.Email, user.PhotoUrl, user.DeliveryAddress };
+    private static object Profile(CustomerUser user) => new { user.Id, user.Name, user.Email, user.MobileNumber, user.PhotoUrl, user.DeliveryAddress };
 
     private static string? ValidPhoto(string? url) => url is { Length: < 1000 } &&
         Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps ? url : null;
@@ -116,5 +124,6 @@ public sealed class GoogleLoginRequest { public required string Credential { get
 public sealed class UpdateCustomerDetailsRequest
 {
     public required string Name { get; set; }
+    public string? MobileNumber { get; set; }
     public string? DeliveryAddress { get; set; }
 }

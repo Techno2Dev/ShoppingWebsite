@@ -140,7 +140,7 @@ public sealed class AdminController(StoreDbContext db) : ControllerBase
         return Ok(new
         {
             totalOrders = await db.Orders.CountAsync(cancellationToken),
-            revenue = await db.Orders.Where(order => order.PaymentStatus == "Paid" && order.PaymentMethod != "Razorpay")
+            revenue = await db.Orders.Where(order => order.PaymentStatus == "Paid")
                 .SumAsync(order => (decimal?)order.Total, cancellationToken) ?? 0m,
             pendingPayments = await db.Orders.CountAsync(order => order.PaymentStatus == "Pending", cancellationToken),
             productCount = await db.Products.CountAsync(cancellationToken)

@@ -5,6 +5,7 @@ public sealed class Order
     public int Id { get; set; }
     public required string CustomerName { get; set; }
     public required string Email { get; set; }
+    public string? MobileNumber { get; set; }
     public required string Address { get; set; }
     public string PaymentStatus { get; set; } = "Pending";
     public string FulfillmentStatus { get; set; } = "Order received";

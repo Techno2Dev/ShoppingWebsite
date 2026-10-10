@@ -33,6 +33,7 @@ export interface StoreOrder {
   id: number;
   customerName: string;
   email: string;
+  mobileNumber?: string | null;
   address: string;
   paymentStatus: string;
   paymentMethod: 'UPI' | 'Razorpay';
@@ -73,6 +74,7 @@ export interface CustomerProfile {
   id: number;
   name: string;
   email: string;
+  mobileNumber: string | null;
   photoUrl: string | null;
   deliveryAddress: string | null;
 }
@@ -129,9 +131,9 @@ export class StoreApiService {
     return this.http.get<CustomerProfile>(this.apiUrl + '/customer/me', { headers: this.customerHeaders() });
   }
 
-  updateCustomerDetails(name: string, deliveryAddress: string): Observable<CustomerProfile> {
+  updateCustomerDetails(name: string, mobileNumber: string, deliveryAddress: string): Observable<CustomerProfile> {
     return this.http.put<CustomerProfile>(this.apiUrl + '/customer/me',
-      { name: name, deliveryAddress: deliveryAddress }, { headers: this.customerHeaders() });
+      { name: name, mobileNumber: mobileNumber || null, deliveryAddress: deliveryAddress }, { headers: this.customerHeaders() });
   }
 
   customerLogout(): Observable<void> {
@@ -259,6 +261,7 @@ export class StoreApiService {
   createOrder(order: {
     customerName: string;
     email: string;
+    mobileNumber: string;
     address: string;
     paymentMethod: 'UPI' | 'Razorpay';
     items: { productId: number; quantity: number }[];

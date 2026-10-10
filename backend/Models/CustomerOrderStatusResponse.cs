@@ -10,4 +10,5 @@ public sealed record CustomerOrderStatusResponse(
     List<OrderItem> Items,
     string PaymentMethod,
     string FulfillmentStatus,
-    string? TrackingId);
+    string? TrackingId,
+    string? MobileNumber);
