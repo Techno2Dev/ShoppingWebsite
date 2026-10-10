@@ -16,6 +16,7 @@ storeConnectionString = PostgresConnectionString.Normalize(storeConnectionString
 
 builder.Services.AddDbContext<StoreDbContext>(options =>
     options.UseNpgsql(storeConnectionString));
+builder.Services.AddSingleton<TelegramOrderNotifier>();
 var frontendOrigins = builder.Configuration.GetSection("FrontendOrigins").Get<string[]>() ??
     (builder.Configuration["FrontendOrigin"] is { Length: > 0 } configuredOrigin
         ? configuredOrigin.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)

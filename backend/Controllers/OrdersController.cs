@@ -9,7 +9,7 @@ namespace backend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public sealed class OrdersController(StoreDbContext db) : ControllerBase
+public sealed class OrdersController(StoreDbContext db, TelegramOrderNotifier telegram) : ControllerBase
 {
     [HttpGet]
     [Authorize(Policy = "AdminOnly")]
@@ -63,7 +63,6 @@ public sealed class OrdersController(StoreDbContext db) : ControllerBase
             return Conflict(new { message = "One or more products are unavailable in the requested quantity." });
         }
 
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         var accessToken = OrderPaymentSecurity.CreateAccessToken();
         var order = new Order
         {
@@ -82,14 +81,19 @@ public sealed class OrdersController(StoreDbContext db) : ControllerBase
         };
         order.Total = order.Items.Sum(item => item.UnitPrice * item.Quantity);
 
-        foreach (var item in requestedItems)
+        await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
         {
-            products[item.ProductId].Stock -= item.Quantity;
+            foreach (var item in requestedItems)
+            {
+                products[item.ProductId].Stock -= item.Quantity;
+            }
+
+            db.Orders.Add(order);
+            await db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
 
-        db.Orders.Add(order);
-        await db.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        await telegram.OrderCreatedAsync(order.Id, order.Total);
 
         var response = new CreateOrderResponse(
             order.Id,
@@ -155,6 +159,7 @@ public sealed class OrdersController(StoreDbContext db) : ControllerBase
         }
 
         await db.Entry(order).ReloadAsync(cancellationToken);
+        await telegram.PaymentReportedAsync(order.Id);
         return Ok(ToCustomerStatus(order));
     }
 
