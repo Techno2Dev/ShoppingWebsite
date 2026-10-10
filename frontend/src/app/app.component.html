@@ -70,7 +70,7 @@
     <div class="loading-state" *ngIf="loadingAdmin"><span class="spinner"></span> Gathering your numbers…</div>
     <section class="orders-panel"><div class="orders-heading"><div><span class="eyebrow">{{ ordersPage === 1 ? 'THE LATEST' : 'ORDER HISTORY' }}</span><h2>{{ ordersPage === 1 ? 'Recent orders' : 'Older orders' }}</h2><p class="manual-admin-note">Check UPI receipts against your bank before manually marking an order Paid.</p></div><span>{{ ordersTotal }} total</span></div>
       <div class="order-history-nav" *ngIf="ordersTotal > ordersPageSize">
-        <span>{{ ordersPage === 1 ? 'Showing the latest 25 orders' : 'History · page ' + ordersPage + ' of ' + ordersPageCount }}</span>
+        <span>{{ ordersPage === 1 ? 'Showing the latest 15 orders' : 'History · page ' + ordersPage + ' of ' + ordersPageCount }}</span>
         <button type="button" *ngIf="ordersPage === 1" (click)="showOrderHistory()" [disabled]="loadingOrders">View order history →</button>
         <button type="button" *ngIf="ordersPage > 1" (click)="showRecentOrders()" [disabled]="loadingOrders">← Recent orders</button>
       </div>

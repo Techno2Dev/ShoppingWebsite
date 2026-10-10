@@ -20,7 +20,7 @@ public sealed class OrdersController(StoreDbContext db) : ControllerBase
             return BadRequest(new { message = "Page must be between 1 and 1000000." });
         }
 
-        const int pageSize = 25;
+        const int pageSize = 15;
         var totalCount = await db.Orders.CountAsync(cancellationToken);
         var orders = await db.Orders.AsNoTracking().Include(order => order.Items)
             .OrderByDescending(order => order.CreatedAt).ThenByDescending(order => order.Id)

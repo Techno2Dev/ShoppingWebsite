@@ -51,7 +51,7 @@ export class AppComponent implements OnInit {
   qrGenerationError = '';
   orders: StoreOrder[] = [];
   ordersPage = 1;
-  ordersPageSize = 25;
+  ordersPageSize = 15;
   ordersTotal = 0;
   loadingOrders = false;
   private ordersRequestId = 0;
