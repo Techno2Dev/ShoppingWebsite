@@ -35,10 +35,14 @@
         </article>
       </div>
     </section>
-    <div class="resume-payment-banner" *ngIf="currentOrder && orderSuccessId === null" role="status">
-      <div><strong>Order #{{ currentOrder.id }}</strong><span>Payment status: {{ currentOrder.paymentStatus }}</span></div>
-      <button type="button" (click)="reopenPaymentDetails()">{{ currentOrder.paymentReportedAt ? 'Check payment status' : 'Resume payment' }}</button>
-    </div>
+    <aside class="resume-payment-banner" *ngIf="currentOrder && orderSuccessId === null" role="status" aria-label="Your recent order">
+      <div class="resume-payment-banner-copy">
+        <span class="eyebrow">YOUR RECENT ORDER</span>
+        <strong>Order #{{ currentOrder.id }}</strong>
+        <span class="resume-payment-status" [class.resume-payment-status-finished]="currentOrder.paymentStatus !== 'Pending'">{{ currentOrder.paymentStatus === 'Cancelled' ? 'Order cancelled' : 'Payment ' + currentOrder.paymentStatus }}</span>
+      </div>
+      <button type="button" (click)="reopenPaymentDetails()">{{ currentOrder.paymentStatus !== 'Pending' ? 'View order details' : currentOrder.paymentReportedAt ? 'Check payment status' : 'Resume payment' }} <span aria-hidden="true">↗</span></button>
+    </aside>
   </main>
 
   <main class="admin-login-page" *ngIf="adminOpen && !adminAuthenticated">

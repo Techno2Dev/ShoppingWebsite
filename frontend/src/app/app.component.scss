@@ -1578,6 +1578,34 @@ td small {
 .payment-state{
   display:flex;flex-direction:column;gap:5px;margin:12px 0;padding:12px 14px;border:1px solid #e7d7bd;border-left:4px solid #d38a28;border-radius:6px;background:#fff8e9;text-align:left
 }
+.resume-payment-banner{
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;margin:32px 0 44px;padding:20px 24px;border:1px solid #efd9bf;border-left:4px solid #da7a36;border-radius:10px;background:#fff9f0;box-shadow:0 12px 32px rgba(92,47,20,.07)
+}
+.resume-payment-banner-copy{
+  display:flex;flex-direction:column;align-items:flex-start;gap:7px
+}
+.resume-payment-banner-copy strong{
+  color:#4b3020;font-size:18px
+}
+.resume-payment-status{
+  display:inline-block;padding:5px 10px;border-radius:20px;background:#fff0d8;color:#89501c;font-size:11px;font-weight:600
+}
+.resume-payment-status-finished{
+  background:#f5e7de;color:#874534
+}
+.resume-payment-banner button{
+  display:inline-flex;align-items:center;justify-content:center;gap:12px;min-height:42px;padding:10px 16px;border:1px solid #af3925;border-radius:6px;background:#b72e1f;color:#fff;font:600 12px 'DM Sans',Arial,sans-serif;cursor:pointer;transition:background .2s
+}
+.resume-payment-banner button:hover,.resume-payment-banner button:focus-visible{
+  background:#8f241b
+}
+.resume-payment-banner button span{
+  font-size:16px
+}
+@media(max-width:600px){
+  .resume-payment-banner{margin:24px 0 32px;padding:18px}
+  .resume-payment-banner button{width:100%}
+}
 .payment-state strong{
   color:#744018;font-size:12px
 }
