@@ -32,6 +32,32 @@
     </div>
   </header>
   <main class="product-page" *ngIf="!adminOpen && customerPage === 'shop'" @pageEnter id="shop">
+    <section class="shop-feature" [class.shop-feature-festival]="activeFestival" aria-labelledby="shop-feature-title">
+      <div class="shop-feature-copy">
+        <span class="shop-feature-eyebrow">{{ activeFestival ? activeFestival.label : 'A LITTLE SOMETHING FOR EVERY DAY' }}</span>
+        <h1 id="shop-feature-title">{{ activeFestival ? activeFestival.title : 'Good finds,' }} <em>{{ activeFestival ? activeFestival.emphasis : 'made for you.' }}</em></h1>
+        <p>{{ activeFestival ? activeFestival.message : 'Explore thoughtfully selected essentials for the little moments that make a day better.' }}</p>
+        <a class="shop-feature-link" href="#collection">Explore the collection <span aria-hidden="true">↗</span></a>
+      </div>
+      <div class="shop-feature-art" (mouseenter)="featuredPaused = true" (mouseleave)="featuredPaused = false" (focusin)="featuredPaused = true" (focusout)="featuredPaused = false">
+        <img class="shop-feature-seal" *ngIf="featuredProduct" src="assets/sapana-kitchen-katta-logo.png" alt="" aria-hidden="true">
+        <span class="shop-feature-festival-motif" *ngIf="activeFestival" aria-hidden="true">{{ activeFestival.motif }}</span>
+        <button class="shop-feature-product" type="button" *ngIf="featuredProduct as product" [@featuredProductMotion]="product.id" (click)="openProductDetails(product)" [attr.aria-label]="'View ' + product.name + ' details'">
+          <span class="shop-feature-product-image"><img *ngIf="product.imageUrl" [src]="product.imageUrl" [alt]="product.name"><span *ngIf="!product.imageUrl" aria-hidden="true">{{ product.image }}</span></span>
+          <span class="shop-feature-product-name">{{ product.name }}</span>
+          <span class="shop-feature-product-price">{{ product.price | currency:'INR':'symbol':'1.2-2':'en-IN' }} <span aria-hidden="true">↗</span></span>
+        </button>
+        <div class="shop-feature-controls" *ngIf="featuredProducts.length > 1" role="group" [attr.aria-label]="'Featured product ' + (featuredProductIndex + 1) + ' of ' + featuredProducts.length">
+          <button type="button" (click)="moveFeaturedProduct(-1)" aria-label="Previous featured product">‹</button>
+          <div class="shop-feature-progress" aria-hidden="true"><span [style.width.%]="(featuredProductIndex + 1) * 100 / featuredProducts.length"></span></div>
+          <span class="shop-feature-position" aria-hidden="true">{{ featuredProductIndex + 1 }} / {{ featuredProducts.length }}</span>
+          <button type="button" (click)="moveFeaturedProduct(1)" aria-label="Next featured product">›</button>
+        </div>
+        <span class="shop-feature-art-circle" *ngIf="!featuredProduct" aria-hidden="true"></span>
+        <span class="shop-feature-art-spark" *ngIf="!featuredProduct" aria-hidden="true">✳</span>
+      </div>
+      <span class="shop-feature-perk">✦ &nbsp; Free shipping across India</span>
+    </section>
     <section class="collection" id="collection">
       <div class="collection-tools">
         <div class="category-tabs" aria-label="Filter by category"><button *ngFor="let category of categories" (click)="activeCategory = category" [class.selected]="activeCategory === category">{{ category }}</button></div>

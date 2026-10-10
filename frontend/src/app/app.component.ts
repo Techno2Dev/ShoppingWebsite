@@ -1,8 +1,9 @@
-import { Component, ElementRef, HostListener, NgZone, OnInit, ViewChild } from '@angular/core';
+import { Component, ElementRef, HostListener, NgZone, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { animate, group, query, style, transition, trigger } from '@angular/animations';
 import * as QRCode from 'qrcode';
 import { environment } from '../environments/environment';
 import { CartLine, Product, StoreApiService, StoreOrder, AdminSummary, CustomerProfile } from './store-api.service';
+import { FestivalGreeting, festivalForIndiaDate } from './festival-schedule';
 
 @Component({
   selector: 'app-root',
@@ -13,6 +14,12 @@ import { CartLine, Product, StoreApiService, StoreOrder, AdminSummary, CustomerP
       transition(':enter', [
         style({ opacity: 0, transform: 'translateY(10px)' }),
         animate('260ms cubic-bezier(.2,.8,.2,1)', style({ opacity: 1, transform: 'translateY(0)' }))
+      ])
+    ]),
+    trigger('featuredProductMotion', [
+      transition('* => *', [
+        style({ opacity: 0, transform: 'translateY(12px)' }),
+        animate('380ms ease-out', style({ opacity: 1, transform: 'translateY(0)' }))
       ])
     ]),
     trigger('dialogMotion', [
@@ -37,10 +44,17 @@ import { CartLine, Product, StoreApiService, StoreOrder, AdminSummary, CustomerP
     ])
   ]
 })
-export class AppComponent implements OnInit {
+export class AppComponent implements OnInit, OnDestroy {
   readonly reduceMotion = typeof window !== 'undefined' && window.matchMedia &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   products: Product[] = [];
+  activeFestival: FestivalGreeting | null = null;
+  private festivalTimer: number | null = null;
+  featuredProducts: Product[] = [];
+  featuredProductIndex = 0;
+  featuredPaused = false;
+  private featuredManualUntil = 0;
+  private featuredTimer: number | null = null;
   cart: CartLine[] = [];
   selectedProduct: Product | null = null;
   animatedProductId: number | null = null;
@@ -154,6 +168,8 @@ export class AppComponent implements OnInit {
   constructor(private storeApi: StoreApiService, private zone: NgZone) { }
 
   ngOnInit(): void {
+    this.refreshFestivalGreeting();
+    this.festivalTimer = window.setInterval(() => this.refreshFestivalGreeting(), 60 * 1000);
     this.restoreCart();
     this.restorePendingPayment();
     this.loadProducts();
@@ -174,6 +190,44 @@ export class AppComponent implements OnInit {
       });
     }
     this.storeApi.razorpayAvailability().subscribe(result => { this.razorpayAvailable = result.enabled; }, () => { this.razorpayAvailable = false; });
+  }
+
+  ngOnDestroy(): void {
+    if (this.festivalTimer !== null) { window.clearInterval(this.festivalTimer); }
+    if (this.featuredTimer !== null) { window.clearInterval(this.featuredTimer); }
+  }
+
+  @HostListener('document:visibilitychange')
+  refreshFestivalGreeting(): void {
+    if (typeof document === 'undefined' || !document.hidden) {
+      this.activeFestival = festivalForIndiaDate(new Date());
+    }
+  }
+
+  get featuredProduct(): Product | null {
+    return this.featuredProducts.length ? this.featuredProducts[this.featuredProductIndex % this.featuredProducts.length] : null;
+  }
+
+  moveFeaturedProduct(direction: number): void {
+    if (this.featuredProducts.length < 2) { return; }
+    this.featuredProductIndex = (this.featuredProductIndex + direction + this.featuredProducts.length) % this.featuredProducts.length;
+    this.featuredManualUntil = Date.now() + 4500;
+  }
+
+  private updateFeaturedProducts(products: Product[]): void {
+    this.featuredProducts = products.filter(product => product.stock > 0);
+    this.featuredProductIndex = 0;
+    this.featuredManualUntil = 0;
+    if (this.featuredTimer !== null) { window.clearInterval(this.featuredTimer); }
+    this.featuredTimer = null;
+    if (!this.reduceMotion && this.featuredProducts.length > 1) {
+      this.featuredTimer = window.setInterval(() => {
+        if (!this.featuredPaused && Date.now() >= this.featuredManualUntil && !document.hidden && !this.adminOpen && this.customerPage === 'shop' &&
+            !this.selectedProduct && !this.cartOpen && this.orderSuccessId === null) {
+          this.featuredProductIndex = (this.featuredProductIndex + 1) % this.featuredProducts.length;
+        }
+      }, 4500);
+    }
   }
 
   @HostListener('window:hashchange')
@@ -386,6 +440,7 @@ export class AppComponent implements OnInit {
     this.loadingProducts = true;
     this.storeApi.getProducts().subscribe(products => {
       this.products = products;
+      this.updateFeaturedProducts(products);
       this.loadingProducts = false;
       this.hideSplash();
     }, error => {
