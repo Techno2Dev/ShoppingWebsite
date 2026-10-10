@@ -95,8 +95,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #e9bd86;
-  background: linear-gradient(110deg, #fff5e6, #ffead1);
+  background: linear-gradient(90deg, transparent, #e9bd86 18%, #e9bd86 82%, transparent) bottom / 100% 1px no-repeat,
+    linear-gradient(90deg, #fff8ee, #fff1df 18%, #ffead1 65%, #fff8ee);
 }
 
 .topbar .brand {
@@ -723,8 +723,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  border-top: 1px solid #e9bd86;
-  background: linear-gradient(110deg, #ffead1, #fff2dd);
+  background: linear-gradient(90deg, transparent, #e9bd86 18%, #e9bd86 82%, transparent) top / 100% 1px no-repeat,
+    linear-gradient(90deg, #fff8ee, #ffead1 30%, #fff2dd 75%, #fff8ee);
   color: #785039;
   font-size: 10px;
 }
