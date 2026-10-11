@@ -1,0 +1,5 @@
+# Test project build outputs
+bin/
+obj/
+TestResults/
+coverage/

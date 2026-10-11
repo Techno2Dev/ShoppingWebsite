@@ -5,6 +5,7 @@ public sealed class Product
     public int Id { get; set; }
     public required string Name { get; set; }
     public required string Description { get; set; }
+    [MongoDB.Bson.Serialization.Attributes.BsonRepresentation(MongoDB.Bson.BsonType.Decimal128)]
     public decimal Price { get; set; }
     public required string Image { get; set; }
     [System.Text.Json.Serialization.JsonIgnore]

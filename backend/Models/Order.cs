@@ -15,6 +15,7 @@ public sealed class Order
     public string? RazorpayOrderId { get; set; }
     public string? RazorpayPaymentId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    [MongoDB.Bson.Serialization.Attributes.BsonRepresentation(MongoDB.Bson.BsonType.Decimal128)]
     public decimal Total { get; set; }
     public string? PaymentReference { get; set; }
     public DateTime? PaymentReportedAt { get; set; }

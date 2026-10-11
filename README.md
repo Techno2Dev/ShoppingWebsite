@@ -1,20 +1,26 @@
 # Sapana’s Kitchen Katta
 
-A small full-stack storefront starter: Angular 8 frontend, ASP.NET Core 9 API, EF Core, and PostgreSQL (Neon-compatible).
+A small full-stack storefront starter: Angular 8 frontend and ASP.NET Core 9 API, with PostgreSQL (EF Core, Neon-compatible) or MongoDB persistence.
 
 ## Prerequisites
 
 - .NET 9 SDK
 - Node.js and npm
-- A PostgreSQL database, such as Neon
+- A PostgreSQL database, such as Neon, or a MongoDB replica set / sharded cluster
 
 ## Run locally
 
-1. In Neon, create a project/database and copy its connection string. Set it as the `ConnectionStrings__Store` environment variable for the API. Neon `postgresql://` URLs are converted for Npgsql automatically. For local development, keep it in user secrets or your shell environment; do not commit credentials.
+1. Create a PostgreSQL database (for example Neon) or a transaction-capable MongoDB database. Set its connection URI as `ConnectionStrings__Store` for the API. Neon `postgresql://` URLs are converted for Npgsql automatically; MongoDB URIs require a database path. For local development, keep the URI in user secrets or your shell environment; do not commit credentials.
 2. From the repository root, start the API with `cd .\backend` followed by `dotnet run --launch-profile http`. It listens at `http://localhost:5065`.
 3. In a second terminal, install frontend dependencies if needed with `npm --prefix .\frontend install`, then start Angular with `npm --prefix .\frontend start`. Open `http://localhost:4200`.
 
 On first start, EF Core creates the PostgreSQL tables and adds sample products if the product table is empty. Products, uploaded product-image bytes, orders, order items, payment status, and admin accounts are stored in Neon. The image upload accepts JPG, PNG, GIF, and WebP up to 5 MB. The existing local SQLite database is not copied to Neon automatically; export/import any data you need to retain before switching.
+
+### MongoDB instead of PostgreSQL
+
+Set `ConnectionStrings__Store` to a `mongodb://` or `mongodb+srv://` connection URI **including the database name as its path**, for example `mongodb+srv://USER:PASSWORD@HOST/store?retryWrites=true&w=majority`. Put the real URI in an environment secret, not in source control. The API automatically selects its MongoDB-driver-backed controllers; PostgreSQL's EF Core controllers, SQL setup, and existing PostgreSQL behavior remain unchanged for non-MongoDB connection strings. MongoDB uses its own collections and does **not** read or automatically import existing PostgreSQL/SQLite records. Plan a separate migration and backup if you need existing data when switching backends.
+
+MongoDB must be a **replica set or sharded cluster with transaction support** (including Atlas); standalone `mongod` is rejected at startup. The database user needs permission to create collections and indexes, read/write transactions, and run `hello`. On first start the API creates uniqueness, lookup and session-expiry indexes, provisions the configured administrator and seeds six products when empty. Order creation, stock reservation, cancellation/restock, payment review/restock, administrator credential rotation, and customer sign-in/session issuance use MongoDB transactions. Prices and totals are stored as BSON Decimal128; uploaded images remain in product documents (uploads are limited to 5 MB). For a local MongoDB instance, configure a single-node replica set rather than running standalone. Do not use a MongoDB deployment lacking transactions; the application will not fall back to non-atomic writes.
 
 The admin dashboard requires sign-in. In Development only, the demo account is `admin` / `KitchenKatta@123`. In Production, provision the first administrator by setting `Admin__UserName` and `Admin__Password` in the service environment before first start. The password is stored as a salted PBKDF2 hash. Keep database and admin credentials in environment secrets, not source control.
 
@@ -43,7 +49,7 @@ For local development, the API creates a demo administrator if one does not alre
 - Username: `admin`
 - Password: `KitchenKatta@123`
 
-Admin sign-in returns a random eight-hour bearer token. The browser keeps it in tab-scoped session storage and sends it in the Authorization header for admin requests, so deployed admin access does not rely on third-party cookies (including in InPrivate mode). Only its SHA-256 hash is stored in PostgreSQL's `AdminSessions` table; logout revokes it. Protect the frontend from injected scripts, since JavaScript in the same origin can access tab storage. The API must allow the exact frontend origin through CORS. To change credentials, sign in to Admin, select **Change login**, enter the current password, then set a username (3–100 characters, no spaces) and a new password (at least 12 characters). Changing credentials revokes other admin sessions and issues a new token for this tab. The administrator record is stored in the PostgreSQL `AdminUsers` table (`UserName`, `NormalizedUserName`, `PasswordHash`, and `CreatedAt`). Passwords are hashed using PBKDF2-SHA256 with a unique random salt; the plaintext password is not stored. The demo account is seeded only in Development. In Production, set `Admin__UserName` and `Admin__Password` before first startup to provision the initial administrator; change the demo credentials before deployment.
+Admin sign-in returns a random eight-hour bearer token. The browser keeps it in tab-scoped session storage and sends it in the Authorization header for admin requests, so deployed admin access does not rely on third-party cookies (including in InPrivate mode). Only its SHA-256 hash is stored in the selected database's admin-session table/collection; logout revokes it. Protect the frontend from injected scripts, since JavaScript in the same origin can access tab storage. The API must allow the exact frontend origin through CORS. To change credentials, sign in to Admin, select **Change login**, enter the current password, then set a username (3–100 characters, no spaces) and a new password (at least 12 characters). Changing credentials revokes other admin sessions and issues a new token for this tab. The administrator record is stored in the selected database; passwords are hashed using PBKDF2-SHA256 with a unique random salt, never stored in plaintext. The demo account is seeded only in Development. In Production, set `Admin__UserName` and `Admin__Password` before first startup to provision the initial administrator; change the demo credentials before deployment.
 
 ### Festival greetings on the storefront
 

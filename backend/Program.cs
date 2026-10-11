@@ -3,6 +3,7 @@ using backend.Models;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using backend.Mongo;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,16 +15,21 @@ if (builder.Environment.IsDevelopment())
     builder.Configuration.AddCommandLine(args);
 }
 
-builder.Services.AddControllers();
 var storeConnectionString = builder.Configuration.GetConnectionString("Store");
 if (string.IsNullOrWhiteSpace(storeConnectionString))
 {
-    throw new InvalidOperationException("Set ConnectionStrings__Store to your Neon PostgreSQL connection string.");
+    throw new InvalidOperationException("Set ConnectionStrings__Store to a PostgreSQL or MongoDB connection URI.");
 }
-storeConnectionString = PostgresConnectionString.Normalize(storeConnectionString);
-
-builder.Services.AddDbContext<StoreDbContext>(options =>
-    options.UseNpgsql(storeConnectionString));
+var useMongo = storeConnectionString.StartsWith("mongodb://", StringComparison.OrdinalIgnoreCase) ||
+    storeConnectionString.StartsWith("mongodb+srv://", StringComparison.OrdinalIgnoreCase);
+builder.Services.AddControllers(options => options.Conventions.Add(new StoreControllerConvention(useMongo)));
+if (useMongo)
+    builder.Services.AddSingleton(new MongoStore(storeConnectionString));
+else
+{
+    storeConnectionString = PostgresConnectionString.Normalize(storeConnectionString);
+    builder.Services.AddDbContext<StoreDbContext>(options => options.UseNpgsql(storeConnectionString));
+}
 builder.Services.AddSingleton<TelegramOrderNotifier>();
 builder.Services.AddHttpClient<RazorpayTestGateway>(client => client.Timeout = TimeSpan.FromSeconds(12));
 var frontendOrigins = builder.Configuration.GetSection("FrontendOrigins").Get<string[]>() ??
@@ -58,6 +64,12 @@ app.MapControllers();
 
 using (var scope = app.Services.CreateScope())
 {
+    if (useMongo)
+    {
+        await scope.ServiceProvider.GetRequiredService<MongoStore>().InitializeAsync(builder.Configuration, app.Environment.IsDevelopment());
+    }
+    else
+    {
     var db = scope.ServiceProvider.GetRequiredService<StoreDbContext>();
     db.Database.EnsureCreated();
     // EnsureCreated does not add new tables to an existing database.
@@ -116,6 +128,7 @@ using (var scope = app.Services.CreateScope())
             new Product { Name = "Pocket Notebook Set", Description = "Three thoughtfully designed notebooks for ideas on the go.", Price = 18.00m, Image = "📓", Category = "Stationery", Stock = 30 }
         );
         db.SaveChanges();
+    }
     }
 }
 
